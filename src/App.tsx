@@ -6,7 +6,7 @@ import { GovernancePPTPage } from '@/pages/GovernancePPTPage'
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={import.meta.env.BASE_URL}>
       <TimelineProvider>
         <PresentationProvider>
           <Routes>
