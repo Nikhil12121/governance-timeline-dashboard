@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
+    "deploy": "npm run build && npx gh-pages -d dist",
     "postinstall": "patch-package"
   },
   "dependencies": {
@@ -20,6 +21,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.13.0",
+    "gh-pages": "^6.1.1",
     "patch-package": "^8.0.0",
     "@types/react": "^18.2.79",
     "@types/react-dom": "^18.2.25",
