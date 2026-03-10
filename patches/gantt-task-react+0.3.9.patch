@@ -1,0 +1,26 @@
+diff --git a/node_modules/gantt-task-react/dist/index.js b/node_modules/gantt-task-react/dist/index.js
+index 626bb39..275d0c9 100644
+--- a/node_modules/gantt-task-react/dist/index.js
++++ b/node_modules/gantt-task-react/dist/index.js
+@@ -211,7 +211,7 @@ var seedDates = function seedDates(startDate, endDate, viewMode) {
+ };
+ var getLocaleMonth = function getLocaleMonth(date, locale) {
+   var bottomValue = getCachedDateTimeFormat(locale, {
+-    month: "long"
++    month: "short"
+   }).format(date);
+   bottomValue = bottomValue.replace(bottomValue[0], bottomValue[0].toLocaleUpperCase());
+   return bottomValue;
+diff --git a/node_modules/gantt-task-react/dist/index.modern.js b/node_modules/gantt-task-react/dist/index.modern.js
+index b372269..31e7ebe 100644
+--- a/node_modules/gantt-task-react/dist/index.modern.js
++++ b/node_modules/gantt-task-react/dist/index.modern.js
+@@ -210,7 +210,7 @@ var seedDates = function seedDates(startDate, endDate, viewMode) {
+ };
+ var getLocaleMonth = function getLocaleMonth(date, locale) {
+   var bottomValue = getCachedDateTimeFormat(locale, {
+-    month: "long"
++    month: "short"
+   }).format(date);
+   bottomValue = bottomValue.replace(bottomValue[0], bottomValue[0].toLocaleUpperCase());
+   return bottomValue;

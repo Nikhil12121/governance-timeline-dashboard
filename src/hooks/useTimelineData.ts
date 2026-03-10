@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useCallback } from 'react'
 import type { Task } from 'gantt-task-react'
 import type { TimelineTask, ViewMode } from '@/types/timeline'
-import { mockTimelineTasks } from '@/data/mockTimeline'
+import { mockGovernanceTimelineTasks } from '@/data/mockGovernanceTimeline'
 
 function toGanttTask(t: TimelineTask): Task {
   return {
@@ -15,9 +15,9 @@ function toGanttTask(t: TimelineTask): Task {
   }
 }
 
-export function useTimelineData(initialTasks: TimelineTask[] = mockTimelineTasks) {
+export function useTimelineData(initialTasks: TimelineTask[] = mockGovernanceTimelineTasks) {
   const [tasks, setTasks] = useState<TimelineTask[]>(initialTasks)
-  const [viewMode, setViewMode] = useState<ViewMode>('Week')
+  const [viewMode, setViewMode] = useState<ViewMode>('Month')
   const [filterPhases, setFilterPhases] = useState<string[]>([])
   const [showMilestonesOnly, setShowMilestonesOnly] = useState(false)
   const [dateRange, setDateRange] = useState<{ start: Date; end: Date } | null>(null)
@@ -48,11 +48,20 @@ export function useTimelineData(initialTasks: TimelineTask[] = mockTimelineTasks
     [tasks]
   )
 
-  const updateTaskContext = (id: string, manualContext: string) => {
+  const updateTaskContext = useCallback((id: string, manualContext: string) => {
     setTasks((prev) =>
       prev.map((t) => (t.id === id ? { ...t, manualContext } : t))
     )
-  }
+  }, [])
+
+  /** Called when user drags a task bar to change start/end (fix mismatching visual) */
+  const onTaskDateChange = useCallback((taskId: string, start: Date, end: Date) => {
+    setTasks((prev) =>
+      prev.map((t) =>
+        t.id === taskId ? { ...t, start, end } : t
+      )
+    )
+  }, [])
 
   return {
     tasks,
@@ -69,5 +78,6 @@ export function useTimelineData(initialTasks: TimelineTask[] = mockTimelineTasks
     setDateRange,
     updateTaskContext,
     setTasks,
+    onTaskDateChange,
   }
 }

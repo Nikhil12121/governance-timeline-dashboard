@@ -1,6 +1,8 @@
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import { Gantt, Task, ViewMode as GanttViewMode } from 'gantt-task-react'
 import type { ViewMode } from '@/types/timeline'
+import { GSK_THEME } from '@/theme/gsk'
+import { GanttListHeaderCustom, GanttListTableCustom } from './GanttListCustom'
 import 'gantt-task-react/dist/index.css'
 
 const viewModeMap: Record<ViewMode, GanttViewMode> = {
@@ -14,22 +16,51 @@ interface GanttChartProps {
   tasks: Task[]
   viewMode: ViewMode
   listCellWidth?: string
+  /** When set with toColumnWidth, use custom list with resizable Name/From/To and DD-MMM-YYYY dates */
+  fromColumnWidth?: number
+  toColumnWidth?: number
   columnWidth?: number
   onDoubleClickTask?: (task: Task) => void
+  /** When user drags task bar to fix timeline; (taskId, start, end) */
+  onDateChange?: (taskId: string, start: Date, end: Date) => void
+  showLegend?: boolean
 }
 
 export function GanttChart({
   tasks,
   viewMode,
   listCellWidth = '200px',
+  fromColumnWidth,
+  toColumnWidth,
   columnWidth = 40,
   onDoubleClickTask,
+  onDateChange,
+  showLegend = true,
 }: GanttChartProps) {
+  const totalListWidth = useMemo(() => {
+    if (fromColumnWidth != null && toColumnWidth != null) {
+      const nameNum = typeof listCellWidth === 'string' ? parseInt(listCellWidth, 10) || 200 : listCellWidth
+      return `${nameNum + fromColumnWidth + toColumnWidth}px`
+    }
+    return listCellWidth
+  }, [listCellWidth, fromColumnWidth, toColumnWidth])
+
+  const useCustomList = fromColumnWidth != null && toColumnWidth != null
+
   const handleDoubleClick = useCallback(
     (task: Task) => {
       onDoubleClickTask?.(task)
     },
     [onDoubleClickTask]
+  )
+
+  const handleDateChange = useCallback(
+    (task: Task) => {
+      if (onDateChange && task.start && task.end) {
+        onDateChange(task.id, task.start, task.end)
+      }
+    },
+    [onDateChange]
   )
 
   if (tasks.length === 0) {
@@ -41,23 +72,36 @@ export function GanttChart({
   }
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+    <div className="gantt-timeline-wrapper bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
       <Gantt
         tasks={tasks}
-        viewMode={viewModeMap[viewMode] ?? GanttViewMode.Week}
-        listCellWidth={listCellWidth}
+        viewMode={viewModeMap[viewMode] ?? GanttViewMode.Month}
+        listCellWidth={totalListWidth}
         columnWidth={columnWidth}
-        barFill={60}
+        rowHeight={44}
+        barFill={50}
         barCornerRadius={4}
-        barBackgroundColor="#64748b"
+        barBackgroundColor={GSK_THEME.clinical}
         barBackgroundSelectedColor="#334155"
-        projectBackgroundColor="#94a3b8"
-        projectBackgroundSelectedColor="#64748b"
-        milestoneBackgroundColor="#0f766e"
-        milestoneBackgroundSelectedColor="#0d9488"
+        projectBackgroundColor={GSK_THEME.accentColor}
+        projectBackgroundSelectedColor="#c45a10"
+        milestoneBackgroundColor={GSK_THEME.veo}
+        milestoneBackgroundSelectedColor="#5a9b35"
+        TaskListHeader={useCustomList ? GanttListHeaderCustom : undefined}
+        TaskListTable={useCustomList ? GanttListTableCustom : undefined}
         onDoubleClick={onDoubleClickTask ? handleDoubleClick : undefined}
+        onDateChange={onDateChange ? handleDateChange : undefined}
         fontSize="12px"
       />
+      {showLegend && (
+        <div className="flex flex-wrap gap-4 px-4 py-2 border-t border-slate-200 bg-slate-50 text-xs">
+          <span className="font-medium text-slate-600">Milestones and key inflection points:</span>
+          <span style={{ color: GSK_THEME.nonClinical }}>■ Non-clinical</span>
+          <span style={{ color: GSK_THEME.clinical }}>■ Clinical</span>
+          <span style={{ color: GSK_THEME.veo }}>■ VEO</span>
+          <span style={{ color: GSK_THEME.cmc }}>■ CMC</span>
+        </div>
+      )}
     </div>
   )
 }

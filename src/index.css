@@ -12,3 +12,33 @@
 .gantt-container {
   font-family: inherit;
 }
+
+/* Timeline header months: keep short (Jan, Feb, …) readable when zoomed out */
+.gantt-timeline-wrapper .calendar text {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Keep task list (Name, From, To) visible in all view modes including Year view */
+.gantt-timeline-wrapper > div > div:first-child > div:first-child {
+  flex-shrink: 0;
+  min-width: 320px;
+}
+
+/* Export capture: force white/light background so PPT doesn't get black swim lanes */
+.gantt-export-capture {
+  background-color: #ffffff !important;
+}
+.gantt-export-capture svg {
+  background-color: #ffffff !important;
+}
+.gantt-export-capture .gridBody rect {
+  fill: #ffffff !important;
+}
+.gantt-export-capture .gridBody line {
+  stroke: #e5e7eb !important;
+}
+/* Gantt chart header (calendar with months/years) – white in export, not black */
+.gantt-export-capture g.calendar rect {
+  fill: #ffffff !important;
+}
