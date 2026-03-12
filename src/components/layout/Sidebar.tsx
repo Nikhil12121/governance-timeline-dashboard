@@ -12,7 +12,7 @@ interface SidebarProps {
 
 export function Sidebar({ open, onToggle }: SidebarProps) {
   const location = useLocation()
-  const logoUrl = `${import.meta.env.BASE_URL}gsk-logo.svg`
+  const logoUrl = `${import.meta.env.BASE_URL}gsk-logo.svg?v=2`
 
   if (!open) {
     return (

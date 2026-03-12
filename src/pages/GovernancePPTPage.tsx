@@ -1,20 +1,23 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { toPng, toCanvas } from 'html-to-image'
 import { usePresentation } from '@/context/PresentationContext'
 import { useTimeline } from '@/context/TimelineContext'
 import { GanttColumnWidthsProvider } from '@/context/GanttColumnWidthsContext'
 import { generateTimelineSummary, generateKeyMessages } from '@/utils/summary'
 import { exportPresentationToPptx } from '@/utils/pptExport'
+import { fetchAssetOptions, fetchGovernanceProjectData } from '@/lib/governanceApi'
 import { TimelineFilters } from '@/components/timeline/TimelineFilters'
 import { GanttChart } from '@/components/timeline/GanttChart'
 import { EditContextModal } from '@/components/timeline/EditContextModal'
 import { SlidePreviewCard } from '@/components/presentation/SlidePreview'
 import { GSK_THEME } from '@/theme/gsk'
+import type { AssetOption } from '@/types/governanceApi'
+import { mergeGovernanceDataIntoPresentation } from '@/utils/governanceData'
 
 const GSK_ORANGE = GSK_THEME.accentColor
 
 export function GovernancePPTPage() {
-  const { presentation, updateSlide } = usePresentation()
+  const { presentation, setPresentation, updateSlide } = usePresentation()
   const {
     tasks,
     filteredTasks,
@@ -29,6 +32,7 @@ export function GovernancePPTPage() {
     dateRange,
     setDateRange,
     updateTaskContext,
+    setTasks,
     onTaskDateChange,
   } = useTimeline()
 
@@ -45,6 +49,12 @@ export function GovernancePPTPage() {
   const [isCapturingChart, setIsCapturingChart] = useState(false)
   const [coverPanelOpen, setCoverPanelOpen] = useState(true)
   const [consultationPanelOpen, setConsultationPanelOpen] = useState(true)
+  const [assetOptions, setAssetOptions] = useState<AssetOption[]>([])
+  const [selectedProjectKey, setSelectedProjectKey] = useState('')
+  const [loadingAssets, setLoadingAssets] = useState(true)
+  const [loadingProjectData, setLoadingProjectData] = useState(false)
+  const [dataError, setDataError] = useState<string | null>(null)
+  const [lastLoadedProjectLabel, setLastLoadedProjectLabel] = useState<string | null>(null)
   const resizeStartRef = useRef<{ x: number; width: number; kind: 'name' | 'from' | 'to' } | null>(null)
 
   const GANTT_ZOOM_MIN = 32
@@ -95,6 +105,51 @@ export function GovernancePPTPage() {
   const timelineSlide = presentation.slides.find((s) => s.type === 'timeline')
   const contentSlide = presentation.slides.find((s) => s.type === 'content')
   const summarySlide = presentation.slides.find((s) => s.type === 'summary')
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadAssets() {
+      setLoadingAssets(true)
+      try {
+        const options = await fetchAssetOptions()
+        if (cancelled) return
+        setAssetOptions(options)
+        setSelectedProjectKey((current) => current || options[0]?.projectKey || '')
+        setDataError(null)
+      } catch (error) {
+        if (cancelled) return
+        setDataError(error instanceof Error ? error.message : 'Failed to load asset options from the backend API.')
+      } finally {
+        if (!cancelled) setLoadingAssets(false)
+      }
+    }
+
+    loadAssets()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const handleLoadProjectData = useCallback(async () => {
+    if (!selectedProjectKey) return
+
+    setLoadingProjectData(true)
+    setDataError(null)
+
+    try {
+      const data = await fetchGovernanceProjectData(selectedProjectKey)
+      const nextPresentation = mergeGovernanceDataIntoPresentation(presentation, data)
+      setTasks(data.timelineTasks)
+      setPresentation(nextPresentation)
+      setFilename(nextPresentation.filename)
+      setLastLoadedProjectLabel(`${data.project.assetName} (${data.project.projectId})`)
+    } catch (error) {
+      setDataError(error instanceof Error ? error.message : 'Failed to load project data from the backend API.')
+    } finally {
+      setLoadingProjectData(false)
+    }
+  }, [presentation, selectedProjectKey, setPresentation, setTasks])
 
   const handleGenerateAnalysis = () => {
     const summaryText = generateTimelineSummary(filteredTasks)
@@ -262,6 +317,57 @@ export function GovernancePPTPage() {
       {/* Step 1: PM inputs – cover slide + consultation objectives */}
       {activeStep === 1 && (
         <section className="space-y-6">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-800">Load project data</h2>
+                <p className="text-sm text-slate-600 mt-1">
+                  Asset name, project ID, financials, FTE, and resource-demand tables are now wired to a backend API contract. Pick an asset and load the mapped data into the deck.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleLoadProjectData}
+                disabled={loadingAssets || loadingProjectData || !selectedProjectKey}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-white shadow-sm hover:opacity-95 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ backgroundColor: GSK_ORANGE }}
+              >
+                {loadingProjectData ? 'Loading…' : 'Load selected asset'}
+              </button>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] mt-4">
+              <label className="block">
+                <span className="text-sm font-medium text-slate-700">Asset name / project</span>
+                <select
+                  value={selectedProjectKey}
+                  onChange={(e) => setSelectedProjectKey(e.target.value)}
+                  disabled={loadingAssets || assetOptions.length === 0}
+                  className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white disabled:bg-slate-100"
+                >
+                  {loadingAssets && <option value="">Loading assets…</option>}
+                  {!loadingAssets && assetOptions.length === 0 && <option value="">No assets available</option>}
+                  {assetOptions.map((option) => (
+                    <option key={option.projectKey} value={option.projectKey}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="self-end text-xs text-slate-500">
+                Backend route: <code>/api/projects/:projectKey/governance</code>
+              </div>
+            </div>
+            {lastLoadedProjectLabel && (
+              <p className="mt-3 text-sm text-emerald-700">
+                Loaded project data for <strong>{lastLoadedProjectLabel}</strong>. The fields below stay editable, so you can still tailor the deck before export.
+              </p>
+            )}
+            {dataError && (
+              <p className="mt-3 text-sm text-red-600">
+                {dataError}
+              </p>
+            )}
+          </div>
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="flex items-center justify-between gap-3 p-4 border-b border-slate-100">
               <h2 className="text-lg font-semibold text-slate-800">Cover slide (GSK format)</h2>
@@ -277,7 +383,7 @@ export function GovernancePPTPage() {
             </div>
             {coverPanelOpen && (
             <div className="px-6 pb-6">
-            <p className="text-sm text-slate-600 mb-4">Enter asset name, consultation type, date and project ID. These appear on the title slide.</p>
+            <p className="text-sm text-slate-600 mb-4">Asset name and project ID can be auto-filled from the selected backend project above, then manually adjusted here if needed.</p>
             {titleSlide && titleSlide.type === 'title' && (
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block">

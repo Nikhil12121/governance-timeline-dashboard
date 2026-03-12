@@ -1,0 +1,46 @@
+import 'dotenv/config'
+import cors from 'cors'
+import express from 'express'
+import { createGovernanceRepository } from './repositories/index.js'
+
+const app = express()
+const port = Number(process.env.PORT || 8787)
+const mode = process.env.GOVERNANCE_DATA_MODE || 'mock'
+const repository = createGovernanceRepository(mode)
+
+app.use(cors())
+app.use(express.json())
+
+app.get('/api/health', (_req, res) => {
+  res.json({
+    ok: true,
+    mode: process.env.GOVERNANCE_DATA_MODE || 'mock',
+  })
+})
+
+app.get('/api/assets', async (_req, res) => {
+  try {
+    res.json(await repository.getAssetOptions())
+  } catch (error) {
+    res.status(500).send(error instanceof Error ? error.message : 'Failed to load asset options.')
+  }
+})
+
+app.get('/api/projects/:projectKey/governance', async (req, res) => {
+  try {
+    const data = await repository.getGovernanceProjectData(req.params.projectKey)
+
+    if (!data) {
+      res.status(404).send(`Project ${req.params.projectKey} was not found in the configured data source.`)
+      return
+    }
+
+    res.json(data)
+  } catch (error) {
+    res.status(500).send(error instanceof Error ? error.message : 'Failed to load governance project data.')
+  }
+})
+
+app.listen(port, () => {
+  console.log(`Governance API running on http://localhost:${port} (${mode} mode)`)
+})
