@@ -16,9 +16,8 @@ interface GanttChartProps {
   tasks: Task[]
   viewMode: ViewMode
   listCellWidth?: string
-  /** When set with toColumnWidth, use custom list with resizable Name/From/To and DD-MMM-YYYY dates */
-  fromColumnWidth?: number
-  toColumnWidth?: number
+  /** When set, use custom list with resizable Phase/Activity columns */
+  phaseColumnWidth?: number
   columnWidth?: number
   onDoubleClickTask?: (task: Task) => void
   /** When user drags task bar to fix timeline; (taskId, start, end) */
@@ -30,22 +29,21 @@ export function GanttChart({
   tasks,
   viewMode,
   listCellWidth = '200px',
-  fromColumnWidth,
-  toColumnWidth,
+  phaseColumnWidth,
   columnWidth = 40,
   onDoubleClickTask,
   onDateChange,
   showLegend = true,
 }: GanttChartProps) {
   const totalListWidth = useMemo(() => {
-    if (fromColumnWidth != null && toColumnWidth != null) {
+    if (phaseColumnWidth != null) {
       const nameNum = typeof listCellWidth === 'string' ? parseInt(listCellWidth, 10) || 200 : listCellWidth
-      return `${nameNum + fromColumnWidth + toColumnWidth}px`
+      return `${phaseColumnWidth + nameNum}px`
     }
     return listCellWidth
-  }, [listCellWidth, fromColumnWidth, toColumnWidth])
+  }, [listCellWidth, phaseColumnWidth])
 
-  const useCustomList = fromColumnWidth != null && toColumnWidth != null
+  const useCustomList = phaseColumnWidth != null
 
   const handleDoubleClick = useCallback(
     (task: Task) => {

@@ -1,5 +1,20 @@
 import type { ViewMode } from '@/types/timeline'
 
+function formatDateInputValue(date: Date | null | undefined) {
+  if (!date) return ''
+  const year = date.getFullYear()
+  const month = `${date.getMonth() + 1}`.padStart(2, '0')
+  const day = `${date.getDate()}`.padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function parseLocalDate(value: string) {
+  if (!value) return null
+  const [year, month, day] = value.split('-').map(Number)
+  if (!year || !month || !day) return null
+  return new Date(year, month - 1, day, 12, 0, 0, 0)
+}
+
 interface TimelineFiltersProps {
   phases: string[]
   filterPhases: string[]
@@ -81,9 +96,9 @@ export function TimelineFilters({
           <label className="block text-xs font-medium text-slate-500 mb-1">From</label>
           <input
             type="date"
-            value={dateRange?.start.toISOString().slice(0, 10) ?? ''}
+            value={formatDateInputValue(dateRange?.start)}
             onChange={(e) => {
-              const d = e.target.value ? new Date(e.target.value) : null
+              const d = parseLocalDate(e.target.value)
               if (!d) return
               if (!dateRange) {
                 const end = new Date(d)
@@ -100,9 +115,9 @@ export function TimelineFilters({
           <label className="block text-xs font-medium text-slate-500 mb-1">To</label>
           <input
             type="date"
-            value={dateRange?.end.toISOString().slice(0, 10) ?? ''}
+            value={formatDateInputValue(dateRange?.end)}
             onChange={(e) => {
-              const d = e.target.value ? new Date(e.target.value) : null
+              const d = parseLocalDate(e.target.value)
               if (!d || !dateRange) return
               setDateRange({ ...dateRange, end: d })
             }}

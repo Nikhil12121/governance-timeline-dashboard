@@ -1,15 +1,13 @@
 import { createContext, useContext, type ReactNode } from 'react'
 
 export interface GanttColumnWidths {
+  phaseWidth: number
   nameWidth: number
-  fromWidth: number
-  toWidth: number
 }
 
 const defaultWidths: GanttColumnWidths = {
+  phaseWidth: 150,
   nameWidth: 220,
-  fromWidth: 110,
-  toWidth: 110,
 }
 
 const GanttColumnWidthsContext = createContext<GanttColumnWidths>(defaultWidths)

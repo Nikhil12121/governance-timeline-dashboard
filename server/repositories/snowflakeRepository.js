@@ -129,7 +129,18 @@ function executeQuery(connection, sql) {
   })
 }
 
+function usesAsyncAuthenticator(authenticator) {
+  const value = String(authenticator ?? '').toLowerCase()
+  return value === 'externalbrowser' || value.startsWith('https://') || value.includes('okta')
+}
+
 function connect(connection) {
+  const config = getSnowflakeConfig()
+
+  if (usesAsyncAuthenticator(config.authenticator)) {
+    return connection.connectAsync()
+  }
+
   return new Promise((resolve, reject) => {
     connection.connect((err, conn) => {
       if (err) {

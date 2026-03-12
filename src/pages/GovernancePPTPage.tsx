@@ -42,9 +42,8 @@ export function GovernancePPTPage() {
   const [filename, setFilename] = useState(presentation.filename)
   const [activeStep, setActiveStep] = useState<1 | 2 | 3 | 4>(1)
   const [ganttExpanded, setGanttExpanded] = useState(false)
+  const [phaseColumnWidth, setPhaseColumnWidth] = useState(150)
   const [listCellWidth, setListCellWidth] = useState(220)
-  const [fromColumnWidth, setFromColumnWidth] = useState(110)
-  const [toColumnWidth, setToColumnWidth] = useState(110)
   const [ganttColumnWidth, setGanttColumnWidth] = useState(44)
   const [isCapturingChart, setIsCapturingChart] = useState(false)
   const [coverPanelOpen, setCoverPanelOpen] = useState(true)
@@ -55,7 +54,7 @@ export function GovernancePPTPage() {
   const [loadingProjectData, setLoadingProjectData] = useState(false)
   const [dataError, setDataError] = useState<string | null>(null)
   const [lastLoadedProjectLabel, setLastLoadedProjectLabel] = useState<string | null>(null)
-  const resizeStartRef = useRef<{ x: number; width: number; kind: 'name' | 'from' | 'to' } | null>(null)
+  const resizeStartRef = useRef<{ x: number; width: number; kind: 'phase' | 'name' } | null>(null)
 
   const GANTT_ZOOM_MIN = 32
   const GANTT_ZOOM_MAX = 64
@@ -66,12 +65,10 @@ export function GovernancePPTPage() {
     if (!resizeStartRef.current) return
     const delta = e.clientX - resizeStartRef.current.x
     const newWidth = Math.round(resizeStartRef.current.width + delta)
-    if (resizeStartRef.current.kind === 'name') {
-      setListCellWidth(Math.min(450, Math.max(120, newWidth)))
-    } else if (resizeStartRef.current.kind === 'from') {
-      setFromColumnWidth(Math.min(200, Math.max(80, newWidth)))
+    if (resizeStartRef.current.kind === 'phase') {
+      setPhaseColumnWidth(Math.min(240, Math.max(100, newWidth)))
     } else {
-      setToColumnWidth(Math.min(200, Math.max(80, newWidth)))
+      setListCellWidth(Math.min(450, Math.max(120, newWidth)))
     }
   }, [])
   const handleResizeEnd = useCallback(() => {
@@ -84,19 +81,14 @@ export function GovernancePPTPage() {
     document.addEventListener('mousemove', handleResizeMove)
     document.addEventListener('mouseup', handleResizeEnd)
   }, [handleResizeMove, handleResizeEnd])
+  const onResizePhase = (e: React.MouseEvent) => {
+    e.preventDefault()
+    resizeStartRef.current = { x: e.clientX, width: phaseColumnWidth, kind: 'phase' }
+    attachResizeListeners()
+  }
   const onResizeName = (e: React.MouseEvent) => {
     e.preventDefault()
     resizeStartRef.current = { x: e.clientX, width: listCellWidth, kind: 'name' }
-    attachResizeListeners()
-  }
-  const onResizeFrom = (e: React.MouseEvent) => {
-    e.preventDefault()
-    resizeStartRef.current = { x: e.clientX, width: fromColumnWidth, kind: 'from' }
-    attachResizeListeners()
-  }
-  const onResizeTo = (e: React.MouseEvent) => {
-    e.preventDefault()
-    resizeStartRef.current = { x: e.clientX, width: toColumnWidth, kind: 'to' }
     attachResizeListeners()
   }
 
@@ -244,9 +236,8 @@ export function GovernancePPTPage() {
   }
 
   const ganttColumnWidths = {
+    phaseWidth: phaseColumnWidth,
     nameWidth: listCellWidth,
-    fromWidth: fromColumnWidth,
-    toWidth: toColumnWidth,
   }
 
   return (
@@ -281,8 +272,7 @@ export function GovernancePPTPage() {
           tasks={ganttTasks}
           viewMode={viewMode}
           listCellWidth={`${listCellWidth}px`}
-          fromColumnWidth={fromColumnWidth}
-          toColumnWidth={toColumnWidth}
+          phaseColumnWidth={phaseColumnWidth}
           columnWidth={ganttColumnWidth}
         />
       </div>
@@ -543,36 +533,27 @@ export function GovernancePPTPage() {
                 Zoom in
               </button>
             </div>
-            <p className="text-xs text-slate-500 mb-2">Drag the vertical bars to resize the Name, From, and To columns.</p>
+            <p className="text-xs text-slate-500 mb-2">Drag the thin line in the header to resize the Phase / milestone and Activity columns.</p>
             <div className="relative">
-              {/* Handles centered on column boundaries so they don't overlap date text */}
               <div
                 role="separator"
-                aria-label="Resize Name column"
+                aria-label="Resize Phase column"
+                onMouseDown={onResizePhase}
+                className="absolute top-0 z-20 h-10 w-px cursor-col-resize hover:bg-orange-400 bg-slate-400 transition-colors touch-none"
+                style={{ left: phaseColumnWidth, transform: 'translateX(-50%)' }}
+              />
+              <div
+                role="separator"
+                aria-label="Resize Activity column"
                 onMouseDown={onResizeName}
-                className="absolute top-0 bottom-0 z-20 w-0.5 cursor-col-resize hover:bg-orange-400 bg-slate-400 rounded-sm transition-colors touch-none"
-                style={{ left: listCellWidth, transform: 'translateX(-50%)' }}
-              />
-              <div
-                role="separator"
-                aria-label="Resize From column"
-                onMouseDown={onResizeFrom}
-                className="absolute top-0 bottom-0 z-20 w-0.5 cursor-col-resize hover:bg-orange-400 bg-slate-400 rounded-sm transition-colors touch-none"
-                style={{ left: listCellWidth + fromColumnWidth, transform: 'translateX(-50%)' }}
-              />
-              <div
-                role="separator"
-                aria-label="Resize To column"
-                onMouseDown={onResizeTo}
-                className="absolute top-0 bottom-0 z-20 w-0.5 cursor-col-resize hover:bg-orange-400 bg-slate-400 rounded-sm transition-colors touch-none"
-                style={{ left: listCellWidth + fromColumnWidth + toColumnWidth, transform: 'translateX(-50%)' }}
+                className="absolute top-0 z-20 h-10 w-px cursor-col-resize hover:bg-orange-400 bg-slate-400 transition-colors touch-none"
+                style={{ left: phaseColumnWidth + listCellWidth, transform: 'translateX(-50%)' }}
               />
               <GanttChart
                 tasks={ganttTasks}
                 viewMode={viewMode}
                 listCellWidth={`${listCellWidth}px`}
-                fromColumnWidth={fromColumnWidth}
-                toColumnWidth={toColumnWidth}
+                phaseColumnWidth={phaseColumnWidth}
                 columnWidth={ganttColumnWidth}
                 onDoubleClickTask={handleDoubleClickTask}
                 onDateChange={onTaskDateChange}
@@ -723,8 +704,7 @@ export function GovernancePPTPage() {
                       tasks={ganttTasks}
                       viewMode={viewMode}
                       listCellWidth={`${listCellWidth}px`}
-                      fromColumnWidth={fromColumnWidth}
-                      toColumnWidth={toColumnWidth}
+                      phaseColumnWidth={phaseColumnWidth}
                       columnWidth={ganttColumnWidth}
                       showLegend={true}
                     />

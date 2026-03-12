@@ -1,5 +1,5 @@
 import type { Task } from 'gantt-task-react'
-import { useGanttColumnWidths, formatDateDDMMMYYYY } from '@/context/GanttColumnWidthsContext'
+import { useGanttColumnWidths } from '@/context/GanttColumnWidthsContext'
 import 'gantt-task-react/dist/index.css'
 
 const tableStyle: React.CSSProperties = {
@@ -53,13 +53,12 @@ export interface TaskListHeaderProps {
 }
 
 export function GanttListHeaderCustom({ headerHeight, fontFamily, fontSize }: TaskListHeaderProps) {
-  const { nameWidth, fromWidth, toWidth } = useGanttColumnWidths()
+  const { phaseWidth, nameWidth } = useGanttColumnWidths()
   return (
     <div style={{ ...tableStyle, fontFamily, fontSize }}>
       <div style={{ ...headerRowStyle, height: headerHeight - 2 }}>
-        <div style={{ ...headerCellStyle, minWidth: nameWidth }}> Name</div>
-        <div style={{ ...headerCellStyle, ...separatorStyle, minWidth: fromWidth }}> From</div>
-        <div style={{ ...headerCellStyle, ...separatorStyle, minWidth: toWidth }}> To</div>
+        <div style={{ ...headerCellStyle, minWidth: phaseWidth }}> Phase / milestone</div>
+        <div style={{ ...headerCellStyle, ...separatorStyle, minWidth: nameWidth }}> Activity</div>
       </div>
     </div>
   )
@@ -86,11 +85,12 @@ export function GanttListTableCustom({
   setSelectedTask: _setSelectedTask,
   onExpanderClick,
 }: TaskListTableProps) {
-  const { nameWidth, fromWidth, toWidth } = useGanttColumnWidths()
+  const { phaseWidth, nameWidth } = useGanttColumnWidths()
   const width = (n: number) => ({ minWidth: n, maxWidth: n })
   return (
     <div style={{ ...tableStyle, fontFamily, fontSize }}>
       {tasks.map((t, index) => {
+        const task = t as Task & { phase?: string }
         let expanderSymbol = ''
         if (t.hideChildren === false) expanderSymbol = '▼'
         else if (t.hideChildren === true) expanderSymbol = '▶'
@@ -103,6 +103,12 @@ export function GanttListTableCustom({
               ...(index % 2 === 1 ? { backgroundColor: '#f5f5f5' } : {}),
             }}
           >
+            <div
+              style={{ ...cellStyle, ...width(phaseWidth), fontWeight: t.type === 'project' ? 600 : 500, color: '#334155' }}
+              title={task.phase ?? ''}
+            >
+              {task.phase ?? '—'}
+            </div>
             <div style={{ ...cellStyle, ...width(nameWidth) }} title={t.name}>
               <div style={nameWrapperStyle}>
                 <div
@@ -111,14 +117,10 @@ export function GanttListTableCustom({
                 >
                   {expanderSymbol}
                 </div>
-                <div>{t.name}</div>
+                <div style={{ fontWeight: t.type === 'project' ? 600 : 400 }}>
+                  {t.name}
+                </div>
               </div>
-            </div>
-            <div style={{ ...cellStyle, ...width(fromWidth) }}>
-              {t.start ? formatDateDDMMMYYYY(t.start) : ''}
-            </div>
-            <div style={{ ...cellStyle, ...width(toWidth) }}>
-              {t.end ? formatDateDDMMMYYYY(t.end) : ''}
             </div>
           </div>
         )

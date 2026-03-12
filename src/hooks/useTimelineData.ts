@@ -3,6 +3,19 @@ import type { Task } from 'gantt-task-react'
 import type { TimelineTask, ViewMode } from '@/types/timeline'
 import { mockGovernanceTimelineTasks } from '@/data/mockGovernanceTimeline'
 
+function clipTaskToRange(task: TimelineTask, range: { start: Date; end: Date } | null): TimelineTask {
+  if (!range) return task
+
+  const start = task.start < range.start ? range.start : task.start
+  const end = task.end > range.end ? range.end : task.end
+
+  return {
+    ...task,
+    start,
+    end,
+  }
+}
+
 function toGanttTask(t: TimelineTask): Task {
   return {
     id: t.id,
@@ -12,7 +25,9 @@ function toGanttTask(t: TimelineTask): Task {
     progress: t.progress,
     type: t.type,
     project: t.project,
-  }
+    phase: t.phase,
+    manualContext: t.manualContext,
+  } as Task
 }
 
 export function useTimelineData(initialTasks: TimelineTask[] = mockGovernanceTimelineTasks) {
@@ -39,8 +54,8 @@ export function useTimelineData(initialTasks: TimelineTask[] = mockGovernanceTim
   }, [tasks, filterPhases, showMilestonesOnly, dateRange])
 
   const ganttTasks: Task[] = useMemo(
-    () => filteredTasks.map(toGanttTask),
-    [filteredTasks]
+    () => filteredTasks.map((task) => clipTaskToRange(task, dateRange)).map(toGanttTask),
+    [filteredTasks, dateRange]
   )
 
   const phases = useMemo(
