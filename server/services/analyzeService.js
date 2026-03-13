@@ -24,7 +24,7 @@ function buildContextFromGovernance(data) {
 
 const CONSULTATION_SYSTEM = `You are an expert PM writing governance board materials for a pharma R&D project. Output ONLY valid JSON with three arrays of strings: "forDecision", "forInput", "forAwareness". Each array must have at least 5 items (use empty string "" for placeholder lines if needed). Write concise, professional bullet points suitable for VIDRU Board/DRB/PIB. No markdown, no explanation.`
 
-const SUMMARY_SYSTEM = `You are an expert PM writing a short executive summary for a governance slide. Write 2–4 sentences based only on the project and timeline data provided. Be factual and professional. Output plain text only, no headings or bullets.`
+const SUMMARY_SYSTEM = `You are an expert PM writing a board-ready executive summary for a governance slide. The PM will present this to VIDRU Board/DRB/PIB. Use only the asset metadata and timeline data provided. Write 3–5 sentences that: (1) state what the asset/project is and its current phase/status, (2) summarise the timeline and key milestones the user has selected, (3) give a concise takeaway suitable for senior leadership. Be factual, professional, and presentation-ready. Output plain text only, no headings or bullets.`
 
 export async function generateConsultationRationale(projectKey, getGovernanceData) {
   let data
@@ -67,7 +67,7 @@ function getDefaultConsultation() {
   }
 }
 
-export async function generateSummary(projectKey, getGovernanceData) {
+export async function generateSummary(projectKey, getGovernanceData, visibleTimelineSummary = '') {
   let data
   try {
     data = await getGovernanceData(projectKey)
@@ -75,7 +75,10 @@ export async function generateSummary(projectKey, getGovernanceData) {
     return 'Summary could not be generated. Load project data and try again.'
   }
   const context = buildContextFromGovernance(data)
-  const userPrompt = `Write a short executive summary for a governance slide based on:\n\n${context || 'No project data.'}`
+  const timelineSection = visibleTimelineSummary && visibleTimelineSummary.trim()
+    ? `\n\nTimeline the user has selected (use this as the basis for your summary):\n${visibleTimelineSummary.trim()}`
+    : ''
+  const userPrompt = `Generate a board-ready executive summary the PM can present. Use the asset metadata and, if provided, the timeline the user is viewing.\n\nAsset and project data: ${context || 'No project data.'}${timelineSection}`
 
   try {
     const text = await chatCompletion([
@@ -83,7 +86,11 @@ export async function generateSummary(projectKey, getGovernanceData) {
       { role: 'user', content: userPrompt },
     ])
     return text || 'Summary could not be generated.'
-  } catch {
-    return 'Summary could not be generated. Ensure Azure OpenAI is configured.'
+  } catch (err) {
+    const msg = err?.message || String(err)
+    if (msg.includes('not configured') || msg.includes('AZURE_OPENAI')) {
+      return 'Summary could not be generated. Ensure Azure OpenAI is configured.'
+    }
+    return `Summary could not be generated. Azure OpenAI error: ${msg}`
   }
 }

@@ -138,7 +138,12 @@ function connect(connection) {
   const config = getSnowflakeConfig()
 
   if (usesAsyncAuthenticator(config.authenticator)) {
-    return connection.connectAsync()
+    return new Promise((resolve, reject) => {
+      connection.connectAsync((err) => {
+        if (err) reject(err)
+        else resolve(connection)
+      })
+    })
   }
 
   return new Promise((resolve, reject) => {

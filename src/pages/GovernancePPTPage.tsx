@@ -123,7 +123,11 @@ export function GovernancePPTPage({ templateId = 1 }: GovernancePPTPageProps) {
         setDataError(null)
       } catch (error) {
         if (cancelled) return
-        setDataError(error instanceof Error ? error.message : 'Failed to load asset options from the backend API.')
+        const msg = error instanceof Error ? error.message : 'Failed to load asset options from the backend API.'
+        const isNetworkError = msg === 'Failed to fetch' || String(msg).toLowerCase().includes('failed to fetch')
+        setDataError(isNetworkError
+          ? 'Cannot reach backend. Start the API server: run "npm run server" in a separate terminal, then refresh.'
+          : msg)
       } finally {
         if (!cancelled) setLoadingAssets(false)
       }
@@ -183,8 +187,18 @@ export function GovernancePPTPage({ templateId = 1 }: GovernancePPTPageProps) {
     if (selectedProjectKey) {
       setLoadingSummaryAi(true)
       try {
-        const { body } = await fetchSummaryAnalysis(selectedProjectKey)
-        if (summarySlide) updateSlide(summarySlide.id, { body })
+        const visibleSummary = generateTimelineSummary(filteredTasks)
+        const { body } = await fetchSummaryAnalysis(selectedProjectKey, visibleSummary)
+        const isErrorResponse =
+          typeof body === 'string' &&
+          (body.startsWith('Summary could not be generated') || body.includes('Ensure Azure OpenAI is configured'))
+        if (isErrorResponse) {
+          setSummaryAiError(body.includes('Azure OpenAI error:') ? body : 'AI not configured; using timeline-based summary.')
+          const summaryText = generateTimelineSummary(filteredTasks)
+          if (summarySlide) updateSlide(summarySlide.id, { body: summaryText })
+        } else if (summarySlide) {
+          updateSlide(summarySlide.id, { body })
+        }
       } catch (e) {
         setSummaryAiError(e instanceof Error ? e.message : 'AI summary failed')
         const summaryText = generateTimelineSummary(filteredTasks)

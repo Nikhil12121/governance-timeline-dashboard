@@ -38,9 +38,34 @@ npm run server
 npm run dev
 ```
 
-3. Open the app, go to **Your inputs**, select an asset, and click **Load selected asset**.
+3. Open the app at [http://localhost:5173](http://localhost:5173), go to **Your inputs**, select an asset, and click **Load selected asset**.
 
 The current backend runs in `mock` mode and returns Snowflake-shaped project, actual, and forecast data from `server/mock/`. Replace that repository with Snowflake queries when credentials are available.
+
+### If you see "Failed to fetch" or "No assets available" (company laptop)
+
+The frontend calls the backend at `http://localhost:8787/api`. If that fails:
+
+1. **Start the backend first** (in its own terminal):
+   ```bash
+   npm run server
+   ```
+   You should see: `Governance API running on http://localhost:8787`
+
+2. **Confirm the API is reachable** – open [http://localhost:8787/api/health](http://localhost:8787/api/health) in the browser. You should get JSON like `{"ok":true,"mode":"snowflake",...}`.
+
+3. **Set the API URL** – in the project root, create a `.env` file (copy from `.env.example`) and ensure:
+   ```env
+   VITE_API_BASE_URL=http://localhost:8787/api
+   PORT=8787
+   ```
+   Restart the frontend after changing `.env` (`Ctrl+C` then `npm run dev` again).
+
+4. **Run frontend in a second terminal:**
+   ```bash
+   npm run dev
+   ```
+   Then open [http://localhost:5173](http://localhost:5173).
 
 ## Snowflake mode
 

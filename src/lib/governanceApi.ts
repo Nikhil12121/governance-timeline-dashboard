@@ -57,6 +57,14 @@ export async function fetchConsultationAnalysis(projectKey: string): Promise<Con
   return postJson<ConsultationAnalysis>('/analyze/consultation', { projectKey })
 }
 
-export async function fetchSummaryAnalysis(projectKey: string): Promise<{ body: string }> {
-  return postJson<{ body: string }>('/analyze/summary', { projectKey })
+export async function fetchSummaryAnalysis(
+  projectKey: string,
+  visibleTimelineSummary?: string
+): Promise<{ body: string }> {
+  return postJson<{ body: string }>('/analyze/summary', {
+    projectKey,
+    ...(visibleTimelineSummary != null && visibleTimelineSummary !== ''
+      ? { visibleTimelineSummary }
+      : {}),
+  })
 }

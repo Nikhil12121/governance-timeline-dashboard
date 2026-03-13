@@ -13,10 +13,13 @@ app.use(cors())
 app.use(express.json())
 
 app.get('/api/health', (_req, res) => {
+  const hasEndpoint = !!process.env.AZURE_OPENAI_ENDPOINT
+  const hasKey = !!process.env.AZURE_OPENAI_API_KEY
   res.json({
     ok: true,
     mode: process.env.GOVERNANCE_DATA_MODE || 'mock',
-    genAiConfigured: !!(process.env.AZURE_OPENAI_ENDPOINT && process.env.AZURE_OPENAI_API_KEY),
+    genAiConfigured: hasEndpoint && hasKey,
+    genAiHint: !hasEndpoint && !hasKey ? 'Set AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY in .env' : !hasKey ? 'Set AZURE_OPENAI_API_KEY in .env' : !hasEndpoint ? 'Set AZURE_OPENAI_ENDPOINT in .env' : null,
   })
 })
 
@@ -59,12 +62,16 @@ app.post('/api/analyze/consultation', async (req, res) => {
 
 app.post('/api/analyze/summary', async (req, res) => {
   try {
-    const { projectKey } = req.body || {}
+    const { projectKey, visibleTimelineSummary } = req.body || {}
     if (!projectKey || typeof projectKey !== 'string') {
       res.status(400).json({ error: 'projectKey is required' })
       return
     }
-    const body = await generateSummary(projectKey, (key) => repository.getGovernanceProjectData(key))
+    const body = await generateSummary(
+      projectKey,
+      (key) => repository.getGovernanceProjectData(key),
+      typeof visibleTimelineSummary === 'string' ? visibleTimelineSummary : ''
+    )
     res.json({ body })
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : 'Summary analysis failed.' })
