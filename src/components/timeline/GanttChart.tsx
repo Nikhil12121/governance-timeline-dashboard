@@ -12,6 +12,11 @@ const viewModeMap: Record<ViewMode, GanttViewMode> = {
   Year: GanttViewMode.Year,
 }
 
+/** Min column width so month labels (Jan, Feb, …) don’t overlap in Template 1 */
+const MIN_COLUMN_WIDTH_MONTH_VIEW = 28
+/** Compact column width for Year view so we don’t waste horizontal space */
+const COLUMN_WIDTH_YEAR_VIEW = 28
+
 interface GanttChartProps {
   tasks: Task[]
   viewMode: ViewMode
@@ -19,6 +24,8 @@ interface GanttChartProps {
   /** When set, use custom list with resizable Phase/Activity columns */
   phaseColumnWidth?: number
   columnWidth?: number
+  /** When true, allow narrower column width for preview cards (avoids month overlap) */
+  previewFit?: boolean
   onDoubleClickTask?: (task: Task) => void
   /** When user drags task bar to fix timeline; (taskId, start, end) */
   onDateChange?: (taskId: string, start: Date, end: Date) => void
@@ -31,10 +38,17 @@ export function GanttChart({
   listCellWidth = '200px',
   phaseColumnWidth,
   columnWidth = 40,
+  previewFit = false,
   onDoubleClickTask,
   onDateChange,
   showLegend = true,
 }: GanttChartProps) {
+  const baseWidth = columnWidth ?? 40
+  const effectiveColumnWidth = useMemo(() => {
+    if (previewFit) return baseWidth
+    if (viewMode === 'Year') return COLUMN_WIDTH_YEAR_VIEW
+    return Math.max(baseWidth, MIN_COLUMN_WIDTH_MONTH_VIEW)
+  }, [previewFit, viewMode, baseWidth])
   const totalListWidth = useMemo(() => {
     if (phaseColumnWidth != null) {
       const nameNum = typeof listCellWidth === 'string' ? parseInt(listCellWidth, 10) || 200 : listCellWidth
@@ -75,7 +89,7 @@ export function GanttChart({
         tasks={tasks}
         viewMode={viewModeMap[viewMode] ?? GanttViewMode.Month}
         listCellWidth={totalListWidth}
-        columnWidth={columnWidth}
+        columnWidth={effectiveColumnWidth}
         rowHeight={44}
         barFill={50}
         barCornerRadius={4}

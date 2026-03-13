@@ -12,6 +12,19 @@ async function fetchJson<T>(path: string): Promise<T> {
   return response.json() as Promise<T>
 }
 
+async function postJson<T>(path: string, body: object): Promise<T> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}))
+    throw new Error((err as { error?: string }).error || response.statusText)
+  }
+  return response.json() as Promise<T>
+}
+
 function toTimelineTask(task: TimelineTaskDto): TimelineTask {
   return {
     ...task,
@@ -32,4 +45,18 @@ export async function fetchGovernanceProjectData(
     ...data,
     timelineTasks: data.timelineTasks.map(toTimelineTask),
   }
+}
+
+export interface ConsultationAnalysis {
+  forDecision: string[]
+  forInput: string[]
+  forAwareness: string[]
+}
+
+export async function fetchConsultationAnalysis(projectKey: string): Promise<ConsultationAnalysis> {
+  return postJson<ConsultationAnalysis>('/analyze/consultation', { projectKey })
+}
+
+export async function fetchSummaryAnalysis(projectKey: string): Promise<{ body: string }> {
+  return postJson<{ body: string }>('/analyze/summary', { projectKey })
 }

@@ -13,9 +13,9 @@
   font-family: inherit;
 }
 
-/* Timeline header months: keep short (Jan, Feb, …) readable when zoomed out */
+/* Timeline header (Template 1): short month/year labels, no overlap */
 .gantt-timeline-wrapper .calendar text {
-  font-size: 11px;
+  font-size: 10px;
   font-variant-numeric: tabular-nums;
 }
 

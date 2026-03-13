@@ -3,7 +3,11 @@ import { Link, useLocation } from 'react-router-dom'
 const GSK_ORANGE = '#E87722'
 /** Dark orange to match GSK theme – clearly orange, not black */
 const SIDEBAR_BG = '#9C4A1A'
-const nav = [{ to: '/', label: 'Governance PPT' }]
+const nav = [
+  { to: '/', label: 'Timeline' },
+  { to: '/template-2', label: 'Plan + Financials' },
+  { to: '/template-3', label: 'Milestones & Swimlane' },
+]
 
 interface SidebarProps {
   open: boolean

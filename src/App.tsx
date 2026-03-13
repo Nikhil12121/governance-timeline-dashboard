@@ -11,7 +11,9 @@ export default function App() {
         <PresentationProvider>
           <Routes>
             <Route path="/" element={<Layout />}>
-              <Route index element={<GovernancePPTPage />} />
+              <Route index element={<GovernancePPTPage templateId={1} />} />
+              <Route path="template-2" element={<GovernancePPTPage templateId={2} />} />
+              <Route path="template-3" element={<GovernancePPTPage templateId={3} />} />
             </Route>
           </Routes>
         </PresentationProvider>

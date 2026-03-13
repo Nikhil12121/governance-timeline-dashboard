@@ -2,6 +2,7 @@ import 'dotenv/config'
 import cors from 'cors'
 import express from 'express'
 import { createGovernanceRepository } from './repositories/index.js'
+import { generateConsultationRationale, generateSummary } from './services/analyzeService.js'
 
 const app = express()
 const port = Number(process.env.PORT || 8787)
@@ -15,6 +16,7 @@ app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
     mode: process.env.GOVERNANCE_DATA_MODE || 'mock',
+    genAiConfigured: !!(process.env.AZURE_OPENAI_ENDPOINT && process.env.AZURE_OPENAI_API_KEY),
   })
 })
 
@@ -38,6 +40,34 @@ app.get('/api/projects/:projectKey/governance', async (req, res) => {
     res.json(data)
   } catch (error) {
     res.status(500).send(error instanceof Error ? error.message : 'Failed to load governance project data.')
+  }
+})
+
+app.post('/api/analyze/consultation', async (req, res) => {
+  try {
+    const { projectKey } = req.body || {}
+    if (!projectKey || typeof projectKey !== 'string') {
+      res.status(400).json({ error: 'projectKey is required' })
+      return
+    }
+    const result = await generateConsultationRationale(projectKey, (key) => repository.getGovernanceProjectData(key))
+    res.json(result)
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Consultation analysis failed.' })
+  }
+})
+
+app.post('/api/analyze/summary', async (req, res) => {
+  try {
+    const { projectKey } = req.body || {}
+    if (!projectKey || typeof projectKey !== 'string') {
+      res.status(400).json({ error: 'projectKey is required' })
+      return
+    }
+    const body = await generateSummary(projectKey, (key) => repository.getGovernanceProjectData(key))
+    res.json({ body })
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Summary analysis failed.' })
   }
 })
 

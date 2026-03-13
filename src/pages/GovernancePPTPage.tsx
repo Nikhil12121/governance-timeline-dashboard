@@ -5,9 +5,11 @@ import { useTimeline } from '@/context/TimelineContext'
 import { GanttColumnWidthsProvider } from '@/context/GanttColumnWidthsContext'
 import { generateTimelineSummary, generateKeyMessages } from '@/utils/summary'
 import { exportPresentationToPptx } from '@/utils/pptExport'
-import { fetchAssetOptions, fetchGovernanceProjectData } from '@/lib/governanceApi'
+import { fetchAssetOptions, fetchGovernanceProjectData, fetchConsultationAnalysis, fetchSummaryAnalysis } from '@/lib/governanceApi'
 import { TimelineFilters } from '@/components/timeline/TimelineFilters'
 import { GanttChart } from '@/components/timeline/GanttChart'
+import { GanttChartTemplate2 } from '@/components/timeline/GanttChartTemplate2'
+import { GanttChartTemplate3 } from '@/components/timeline/GanttChartTemplate3'
 import { EditContextModal } from '@/components/timeline/EditContextModal'
 import { SlidePreviewCard } from '@/components/presentation/SlidePreview'
 import { GSK_THEME } from '@/theme/gsk'
@@ -16,7 +18,11 @@ import { mergeGovernanceDataIntoPresentation } from '@/utils/governanceData'
 
 const GSK_ORANGE = GSK_THEME.accentColor
 
-export function GovernancePPTPage() {
+interface GovernancePPTPageProps {
+  templateId?: 1 | 2 | 3
+}
+
+export function GovernancePPTPage({ templateId = 1 }: GovernancePPTPageProps) {
   const { presentation, setPresentation, updateSlide } = usePresentation()
   const {
     tasks,
@@ -54,6 +60,10 @@ export function GovernancePPTPage() {
   const [loadingProjectData, setLoadingProjectData] = useState(false)
   const [dataError, setDataError] = useState<string | null>(null)
   const [lastLoadedProjectLabel, setLastLoadedProjectLabel] = useState<string | null>(null)
+  const [loadingConsultationAi, setLoadingConsultationAi] = useState(false)
+  const [consultationAiError, setConsultationAiError] = useState<string | null>(null)
+  const [loadingSummaryAi, setLoadingSummaryAi] = useState(false)
+  const [summaryAiError, setSummaryAiError] = useState<string | null>(null)
   const resizeStartRef = useRef<{ x: number; width: number; kind: 'phase' | 'name' } | null>(null)
 
   const GANTT_ZOOM_MIN = 32
@@ -95,8 +105,10 @@ export function GovernancePPTPage() {
   const titleSlide = presentation.slides.find((s) => s.type === 'title')
   const consultationSlide = presentation.slides.find((s) => s.type === 'consultation-objectives')
   const timelineSlide = presentation.slides.find((s) => s.type === 'timeline')
+  const financialsGanttSlide = presentation.slides.find((s) => s.type === 'financials-gantt')
   const contentSlide = presentation.slides.find((s) => s.type === 'content')
   const summarySlide = presentation.slides.find((s) => s.type === 'summary')
+  const assetNameForTemplate2 = titleSlide && titleSlide.type === 'title' ? titleSlide.assetName : ''
 
   useEffect(() => {
     let cancelled = false
@@ -143,14 +155,52 @@ export function GovernancePPTPage() {
     }
   }, [presentation, selectedProjectKey, setPresentation, setTasks])
 
-  const handleGenerateAnalysis = () => {
-    const summaryText = generateTimelineSummary(filteredTasks)
-    const bullets = generateKeyMessages(filteredTasks)
-    if (summarySlide) updateSlide(summarySlide.id, { body: summaryText })
-    if (contentSlide && contentSlide.type === 'content') {
-      updateSlide(contentSlide.id, { bullets })
+  const handleGenerateConsultationAi = useCallback(async () => {
+    if (!selectedProjectKey || !consultationSlide) return
+    setLoadingConsultationAi(true)
+    setConsultationAiError(null)
+    try {
+      const result = await fetchConsultationAnalysis(selectedProjectKey)
+      const pad = (arr: string[]) => {
+        const a = [...arr]
+        while (a.length < 5) a.push('')
+        return a.slice(0, 10)
+      }
+      updateSlide(consultationSlide.id, {
+        forDecision: pad(result.forDecision),
+        forInput: pad(result.forInput),
+        forAwareness: pad(result.forAwareness),
+      })
+    } catch (e) {
+      setConsultationAiError(e instanceof Error ? e.message : 'AI consultation failed')
+    } finally {
+      setLoadingConsultationAi(false)
     }
-  }
+  }, [selectedProjectKey, consultationSlide, updateSlide])
+
+  const handleGenerateAnalysis = useCallback(async () => {
+    setSummaryAiError(null)
+    if (selectedProjectKey) {
+      setLoadingSummaryAi(true)
+      try {
+        const { body } = await fetchSummaryAnalysis(selectedProjectKey)
+        if (summarySlide) updateSlide(summarySlide.id, { body })
+      } catch (e) {
+        setSummaryAiError(e instanceof Error ? e.message : 'AI summary failed')
+        const summaryText = generateTimelineSummary(filteredTasks)
+        if (summarySlide) updateSlide(summarySlide.id, { body: summaryText })
+      } finally {
+        setLoadingSummaryAi(false)
+      }
+    } else {
+      const summaryText = generateTimelineSummary(filteredTasks)
+      const bullets = generateKeyMessages(filteredTasks)
+      if (summarySlide) updateSlide(summarySlide.id, { body: summaryText })
+      if (contentSlide && contentSlide.type === 'content') {
+        updateSlide(contentSlide.id, { bullets })
+      }
+    }
+  }, [selectedProjectKey, filteredTasks, summarySlide, contentSlide, updateSlide])
 
   const handleDoubleClickTask = (task: { id: string }) => {
     const full = tasks.find((t) => t.id === task.id) ?? null
@@ -161,7 +211,8 @@ export function GovernancePPTPage() {
     setExporting(true)
     try {
       let chartImage: string | undefined
-      if (chartExportRef.current && ganttTasks.length > 0) {
+      const hasChart = templateId === 1 ? ganttTasks.length > 0 : filteredTasks.length > 0
+      if (chartExportRef.current && hasChart) {
         // Bring chart into viewport so browser paints it, then capture
         setIsCapturingChart(true)
         await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
@@ -205,7 +256,7 @@ export function GovernancePPTPage() {
             })
             const opts = {
               width: 960,
-              height: 420,
+              height: templateId === 2 ? 520 : templateId === 3 ? 480 : 420,
               pixelRatio: 2,
               cacheBust: true,
               backgroundColor: '#ffffff',
@@ -261,23 +312,37 @@ export function GovernancePPTPage() {
           left: isCapturingChart ? 0 : -10000,
           top: 0,
           width: 960,
-          height: 420,
+          height: templateId === 2 ? 520 : templateId === 3 ? 480 : 420,
           zIndex: isCapturingChart ? 99997 : 1,
           opacity: 1,
           pointerEvents: 'none',
         }}
         aria-hidden
       >
-        <GanttChart
-          tasks={ganttTasks}
-          viewMode={viewMode}
-          listCellWidth={`${listCellWidth}px`}
-          phaseColumnWidth={phaseColumnWidth}
-          columnWidth={ganttColumnWidth}
-        />
+        {templateId === 2 ? (
+          <GanttChartTemplate2
+            tasks={filteredTasks}
+            financialsSlide={financialsGanttSlide?.type === 'financials-gantt' ? financialsGanttSlide : null}
+            assetName={assetNameForTemplate2}
+            subtitle={financialsGanttSlide?.type === 'financials-gantt' ? financialsGanttSlide.subtitle : undefined}
+            viewMode={viewMode}
+          />
+        ) : templateId === 3 ? (
+          <GanttChartTemplate3 tasks={filteredTasks} assetName={assetNameForTemplate2} timelineWidth={640} viewMode={viewMode} />
+        ) : (
+          <GanttChart
+            tasks={ganttTasks}
+            viewMode={viewMode}
+            listCellWidth={`${listCellWidth}px`}
+            phaseColumnWidth={phaseColumnWidth}
+            columnWidth={ganttColumnWidth}
+          />
+        )}
       </div>
 
-      <h1 className="text-2xl font-bold text-slate-800 mb-1">Governance PPT</h1>
+      <h1 className="text-2xl font-bold text-slate-800 mb-1">
+        {templateId === 1 ? 'Timeline' : templateId === 2 ? 'Plan + Financials' : 'Milestones & Swimlane'}
+      </h1>
       <p className="text-slate-600 mb-8">
         Fill in your inputs, customise the timeline, review generated analysis (edit if needed), preview the deck, then download.
       </p>
@@ -373,58 +438,40 @@ export function GovernancePPTPage() {
             </div>
             {coverPanelOpen && (
             <div className="px-6 pb-6">
-            <p className="text-sm text-slate-600 mb-4">Asset name and project ID can be auto-filled from the selected backend project above, then manually adjusted here if needed.</p>
+            <p className="text-sm text-slate-600 mb-4">All fields below are shown on the first slide of the PPT. Load an asset to auto-fill project/asset line; edit any field as needed.</p>
             {titleSlide && titleSlide.type === 'title' && (
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block">
                   <span className="text-sm font-medium text-slate-700">Board heading</span>
-                  <input
-                    type="text"
-                    value={titleSlide.boardHeading ?? titleSlide.title}
-                    onChange={(e) => updateSlide(titleSlide.id, { boardHeading: e.target.value, title: e.target.value })}
-                    className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                    placeholder="VIDRU Board/ DRB/ PIB*"
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-sm font-medium text-slate-700">Asset name</span>
-                  <input
-                    type="text"
-                    value={titleSlide.assetName ?? ''}
-                    onChange={(e) => updateSlide(titleSlide.id, { assetName: e.target.value })}
-                    className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                    placeholder="[ASSET- NAME]"
-                  />
+                  <input type="text" value={titleSlide.boardHeading ?? titleSlide.title} onChange={(e) => updateSlide(titleSlide.id, { boardHeading: e.target.value, title: e.target.value })} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="VIDRU Board/ DRB/ PIB*" />
                 </label>
                 <label className="block">
                   <span className="text-sm font-medium text-slate-700">Type of consultation</span>
-                  <input
-                    type="text"
-                    value={titleSlide.consultationType ?? ''}
-                    onChange={(e) => updateSlide(titleSlide.id, { consultationType: e.target.value })}
-                    className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                    placeholder="[Type of consultation]"
-                  />
+                  <input type="text" value={titleSlide.consultationType ?? ''} onChange={(e) => updateSlide(titleSlide.id, { consultationType: e.target.value })} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="[Type of consultation]" />
+                </label>
+                <label className="block sm:col-span-2">
+                  <span className="text-sm font-medium text-slate-700">Asset / project line (orange on slide)</span>
+                  <input type="text" value={titleSlide.assetDescriptionLine ?? ''} onChange={(e) => updateSlide(titleSlide.id, { assetDescriptionLine: e.target.value })} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="e.g. 50987: GSK3772701- P falciparum whole cell inhibitor... – malaria endorsement of C2Phase2" />
+                </label>
+                <label className="block">
+                  <span className="text-sm font-medium text-slate-700">Owner / presenter</span>
+                  <input type="text" value={titleSlide.ownerLine ?? ''} onChange={(e) => updateSlide(titleSlide.id, { ownerLine: e.target.value })} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="e.g. Laura Sanz on behalf of GSK701 EDT" />
+                </label>
+                <label className="block">
+                  <span className="text-sm font-medium text-slate-700">Finance partner</span>
+                  <input type="text" value={titleSlide.financePartner ?? ''} onChange={(e) => updateSlide(titleSlide.id, { financePartner: e.target.value })} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="e.g. Finance partner: Rupe Sehgal" />
                 </label>
                 <label className="block">
                   <span className="text-sm font-medium text-slate-700">Date (DD/MM/YYYY)</span>
-                  <input
-                    type="text"
-                    value={titleSlide.consultationDate ?? ''}
-                    onChange={(e) => updateSlide(titleSlide.id, { consultationDate: e.target.value })}
-                    className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                    placeholder="DD/MM/YYYY"
-                  />
+                  <input type="text" value={titleSlide.consultationDate ?? ''} onChange={(e) => updateSlide(titleSlide.id, { consultationDate: e.target.value })} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="DD/MM/YYYY" />
                 </label>
-                <label className="block sm:col-span-2">
+                <label className="block">
                   <span className="text-sm font-medium text-slate-700">Project ID Code</span>
-                  <input
-                    type="text"
-                    value={titleSlide.projectId ?? ''}
-                    onChange={(e) => updateSlide(titleSlide.id, { projectId: e.target.value })}
-                    className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                    placeholder="[Project ID Code]"
-                  />
+                  <input type="text" value={titleSlide.projectId ?? ''} onChange={(e) => updateSlide(titleSlide.id, { projectId: e.target.value })} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="[Project ID Code]" />
+                </label>
+                <label className="block">
+                  <span className="text-sm font-medium text-slate-700">Asset name (internal)</span>
+                  <input type="text" value={titleSlide.assetName ?? ''} onChange={(e) => updateSlide(titleSlide.id, { assetName: e.target.value })} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="[ASSET- NAME]" />
                 </label>
               </div>
             )}
@@ -447,35 +494,59 @@ export function GovernancePPTPage() {
               </div>
               {consultationPanelOpen && (
               <div className="px-6 pb-6">
-              <p className="text-sm text-slate-600 mb-4">One bullet per line for each section.</p>
+              <div className="flex flex-wrap items-center gap-3 mb-4">
+                <button
+                  type="button"
+                  onClick={handleGenerateConsultationAi}
+                  disabled={loadingConsultationAi || !selectedProjectKey}
+                  className="px-4 py-2 rounded-lg text-sm font-medium text-white shadow-sm hover:opacity-95 disabled:opacity-50"
+                  style={{ backgroundColor: GSK_ORANGE }}
+                >
+                  {loadingConsultationAi ? 'Generating…' : 'Generate with AI'}
+                </button>
+                {consultationAiError && <span className="text-sm text-red-600">{consultationAiError}</span>}
+              </div>
+              <p className="text-sm text-slate-600 mb-4">Minimum 5 lines per section. You can add blank lines and free-form text; line breaks are preserved.</p>
               <label className="block mb-4">
-                <span className="text-sm font-medium text-slate-700">For Decision</span>
+                <span className="text-sm font-medium text-slate-700">For Decision (min 5 points)</span>
                 <textarea
                   value={consultationSlide.forDecision.join('\n')}
-                  onChange={(e) => updateSlide(consultationSlide.id, { forDecision: e.target.value.split('\n').map((s) => s.trim()).filter(Boolean) })}
-                  className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm min-h-[80px]"
-                  placeholder="One bullet per line"
-                  rows={3}
+                  onChange={(e) => {
+                    const lines = e.target.value.split('\n').map((s) => s.trim())
+                    while (lines.length < 5) lines.push('')
+                    updateSlide(consultationSlide.id, { forDecision: lines })
+                  }}
+                  className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm min-h-[140px]"
+                  placeholder="One point per line; add at least 5 lines"
+                  rows={7}
                 />
               </label>
               <label className="block mb-4">
-                <span className="text-sm font-medium text-slate-700">For Input</span>
+                <span className="text-sm font-medium text-slate-700">For Input (min 5 points)</span>
                 <textarea
                   value={consultationSlide.forInput.join('\n')}
-                  onChange={(e) => updateSlide(consultationSlide.id, { forInput: e.target.value.split('\n').map((s) => s.trim()).filter(Boolean) })}
-                  className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm min-h-[80px]"
-                  placeholder="One bullet per line"
-                  rows={3}
+                  onChange={(e) => {
+                    const lines = e.target.value.split('\n').map((s) => s.trim())
+                    while (lines.length < 5) lines.push('')
+                    updateSlide(consultationSlide.id, { forInput: lines })
+                  }}
+                  className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm min-h-[140px]"
+                  placeholder="One point per line; add at least 5 lines"
+                  rows={7}
                 />
               </label>
               <label className="block">
-                <span className="text-sm font-medium text-slate-700">For Awareness</span>
+                <span className="text-sm font-medium text-slate-700">For Awareness (min 5 points)</span>
                 <textarea
                   value={consultationSlide.forAwareness.join('\n')}
-                  onChange={(e) => updateSlide(consultationSlide.id, { forAwareness: e.target.value.split('\n').map((s) => s.trim()).filter(Boolean) })}
-                  className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm min-h-[80px]"
-                  placeholder="One bullet per line"
-                  rows={3}
+                  onChange={(e) => {
+                    const lines = e.target.value.split('\n').map((s) => s.trim())
+                    while (lines.length < 5) lines.push('')
+                    updateSlide(consultationSlide.id, { forAwareness: lines })
+                  }}
+                  className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm min-h-[140px]"
+                  placeholder="One point per line; add at least 5 lines"
+                  rows={7}
                 />
               </label>
               </div>
@@ -512,53 +583,29 @@ export function GovernancePPTPage() {
               dateRange={dateRange}
               setDateRange={setDateRange}
             />
-            <div className="flex items-center gap-3 mb-2">
-              <span className="text-xs text-slate-500">Gantt zoom:</span>
-              <button
-                type="button"
-                onClick={zoomOut}
-                disabled={ganttColumnWidth <= GANTT_ZOOM_MIN}
-                className="px-2 py-1 text-xs font-medium rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Zoom out (see more timeline)"
-              >
-                Zoom out
-              </button>
-              <button
-                type="button"
-                onClick={zoomIn}
-                disabled={ganttColumnWidth >= GANTT_ZOOM_MAX}
-                className="px-2 py-1 text-xs font-medium rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Zoom in (see less, larger)"
-              >
-                Zoom in
-              </button>
-            </div>
-            <p className="text-xs text-slate-500 mb-2">Drag the thin line in the header to resize the Phase / milestone and Activity columns.</p>
-            <div className="relative">
-              <div
-                role="separator"
-                aria-label="Resize Phase column"
-                onMouseDown={onResizePhase}
-                className="absolute top-0 z-20 h-10 w-px cursor-col-resize hover:bg-orange-400 bg-slate-400 transition-colors touch-none"
-                style={{ left: phaseColumnWidth, transform: 'translateX(-50%)' }}
-              />
-              <div
-                role="separator"
-                aria-label="Resize Activity column"
-                onMouseDown={onResizeName}
-                className="absolute top-0 z-20 h-10 w-px cursor-col-resize hover:bg-orange-400 bg-slate-400 transition-colors touch-none"
-                style={{ left: phaseColumnWidth + listCellWidth, transform: 'translateX(-50%)' }}
-              />
-              <GanttChart
-                tasks={ganttTasks}
-                viewMode={viewMode}
-                listCellWidth={`${listCellWidth}px`}
-                phaseColumnWidth={phaseColumnWidth}
-                columnWidth={ganttColumnWidth}
-                onDoubleClickTask={handleDoubleClickTask}
-                onDateChange={onTaskDateChange}
-              />
-            </div>
+            {templateId === 1 && (
+              <div className="flex items-center gap-3 mb-2">
+                <span className="text-xs text-slate-500">Gantt zoom:</span>
+                <button type="button" onClick={zoomOut} disabled={ganttColumnWidth <= GANTT_ZOOM_MIN} className="px-2 py-1 text-xs font-medium rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed" title="Zoom out">Zoom out</button>
+                <button type="button" onClick={zoomIn} disabled={ganttColumnWidth >= GANTT_ZOOM_MAX} className="px-2 py-1 text-xs font-medium rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed" title="Zoom in">Zoom in</button>
+              </div>
+            )}
+            {templateId === 2 ? (
+              <GanttChartTemplate2 tasks={filteredTasks} financialsSlide={financialsGanttSlide?.type === 'financials-gantt' ? financialsGanttSlide : null} assetName={assetNameForTemplate2} subtitle={financialsGanttSlide?.type === 'financials-gantt' ? financialsGanttSlide.subtitle : undefined} viewMode={viewMode} />
+            ) : templateId === 3 ? (
+              <GanttChartTemplate3 tasks={filteredTasks} assetName={assetNameForTemplate2} timelineWidth={640} viewMode={viewMode} />
+            ) : (
+              <>
+                <p className="text-xs text-slate-500 mb-2">Drag the thin line in the header to resize the Phase / milestone and Activity columns. Scroll horizontally if the timeline is wide.</p>
+                <div className="relative max-w-full overflow-x-auto overflow-y-hidden rounded-lg border border-slate-200 bg-white">
+                  <div className="relative min-w-0">
+                    <div role="separator" aria-label="Resize Phase column" onMouseDown={onResizePhase} className="absolute top-0 z-20 h-10 w-px cursor-col-resize hover:bg-orange-400 bg-slate-400 transition-colors touch-none" style={{ left: phaseColumnWidth, transform: 'translateX(-50%)' }} />
+                    <div role="separator" aria-label="Resize Activity column" onMouseDown={onResizeName} className="absolute top-0 z-20 h-10 w-px cursor-col-resize hover:bg-orange-400 bg-slate-400 transition-colors touch-none" style={{ left: phaseColumnWidth + listCellWidth, transform: 'translateX(-50%)' }} />
+                    <GanttChart tasks={ganttTasks} viewMode={viewMode} listCellWidth={`${listCellWidth}px`} phaseColumnWidth={phaseColumnWidth} columnWidth={ganttColumnWidth} onDoubleClickTask={handleDoubleClickTask} onDateChange={onTaskDateChange} />
+                  </div>
+                </div>
+              </>
+            )}
             {timelineSlide && (
               <label className="block mt-4">
                 <span className="text-sm font-medium text-slate-700">Timeline slide title (for PPT)</span>
@@ -578,14 +625,18 @@ export function GovernancePPTPage() {
             <p className="text-sm text-slate-600 mb-4">
               Analysis is based on the timeline data above. Generate, then edit if required.
             </p>
-            <button
-              type="button"
-              onClick={handleGenerateAnalysis}
-              className="mb-4 px-4 py-2 rounded-lg text-sm font-medium text-white hover:opacity-95 transition-opacity"
-              style={{ backgroundColor: GSK_ORANGE }}
-            >
-              Generate from data
-            </button>
+            <div className="flex flex-wrap items-center gap-3 mb-4">
+              <button
+                type="button"
+                onClick={() => handleGenerateAnalysis()}
+                disabled={loadingSummaryAi}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-white hover:opacity-95 disabled:opacity-50"
+                style={{ backgroundColor: GSK_ORANGE }}
+              >
+                {loadingSummaryAi ? 'Generating…' : 'Generate from data'}
+              </button>
+              {summaryAiError && <span className="text-sm text-red-600">{summaryAiError}</span>}
+            </div>
 
             {summarySlide && (
               <label className="block mb-4">
@@ -657,24 +708,29 @@ export function GovernancePPTPage() {
               <button type="button" onClick={zoomOut} disabled={ganttColumnWidth <= GANTT_ZOOM_MIN} className="px-2 py-1 text-xs font-medium rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50">Zoom out</button>
               <button type="button" onClick={zoomIn} disabled={ganttColumnWidth >= GANTT_ZOOM_MAX} className="px-2 py-1 text-xs font-medium rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50">Zoom in</button>
             </div>
-            <div className="space-y-6">
+            <div className="space-y-6 min-w-0 max-w-full">
               {presentation.slides.map((slide, index) => (
-                <div key={slide.id}>
+                <div key={slide.id} className="min-w-0 max-w-full">
                   <SlidePreviewCard
                     slide={slide}
                     pageNum={index + 1}
-                    timelineTasks={slide.type === 'timeline' ? filteredTasks : undefined}
+                    timelineTasks={slide.type === 'timeline' || slide.type === 'financials-gantt' ? filteredTasks : undefined}
                     ganttTasks={slide.type === 'timeline' || slide.type === 'financials-gantt' ? ganttTasks : undefined}
                     viewMode={slide.type === 'timeline' || slide.type === 'financials-gantt' ? viewMode : undefined}
                     ganttColumnWidth={ganttColumnWidth}
                     onExpandGantt={() => setGanttExpanded(true)}
+                    templateId={templateId}
+                    financialsGanttSlide={financialsGanttSlide?.type === 'financials-gantt' ? financialsGanttSlide : null}
+                    assetNameLabel={assetNameForTemplate2}
+                    phaseColumnWidth={phaseColumnWidth}
+                    listCellWidth={listCellWidth}
                   />
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Expand Gantt modal */}
+          {/* Expand Gantt modal – same visual as Timeline & analysis for current template */}
           {ganttExpanded && (
             <div
               className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
@@ -684,7 +740,9 @@ export function GovernancePPTPage() {
             >
               <div className="bg-white rounded-xl shadow-xl max-w-[95vw] w-full max-h-[90vh] flex flex-col overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
-                  <h3 className="font-semibold text-slate-800">Gantt chart – expanded view</h3>
+                  <h3 className="font-semibold text-slate-800">
+                    {templateId === 1 ? 'Gantt chart' : templateId === 2 ? 'Plan + Financials' : 'Milestones & Swimlane'} – expanded view
+                  </h3>
                   <button
                     type="button"
                     onClick={() => setGanttExpanded(false)}
@@ -693,22 +751,34 @@ export function GovernancePPTPage() {
                     Close
                   </button>
                 </div>
-                <div className="flex flex-col flex-1 min-h-0">
-                  <div className="flex items-center gap-2 px-4 py-2 border-b border-slate-200 bg-slate-50">
-                    <span className="text-sm text-slate-600">Zoom:</span>
-                    <button type="button" onClick={zoomOut} disabled={ganttColumnWidth <= GANTT_ZOOM_MIN} className="px-2 py-1 text-xs font-medium rounded border border-slate-300 bg-white disabled:opacity-50">Zoom out</button>
-                    <button type="button" onClick={zoomIn} disabled={ganttColumnWidth >= GANTT_ZOOM_MAX} className="px-2 py-1 text-xs font-medium rounded border border-slate-300 bg-white disabled:opacity-50">Zoom in</button>
-                  </div>
-                  <div className="flex-1 min-h-0 overflow-auto p-4">
-                    <GanttChart
-                      tasks={ganttTasks}
+                <div className="flex flex-col flex-1 min-h-0 overflow-auto p-4">
+                  {templateId === 2 ? (
+                    <GanttChartTemplate2
+                      tasks={filteredTasks}
+                      financialsSlide={financialsGanttSlide?.type === 'financials-gantt' ? financialsGanttSlide : null}
+                      assetName={assetNameForTemplate2}
+                      subtitle={financialsGanttSlide?.type === 'financials-gantt' ? financialsGanttSlide.subtitle : undefined}
                       viewMode={viewMode}
-                      listCellWidth={`${listCellWidth}px`}
-                      phaseColumnWidth={phaseColumnWidth}
-                      columnWidth={ganttColumnWidth}
-                      showLegend={true}
                     />
-                  </div>
+                  ) : templateId === 3 ? (
+                    <GanttChartTemplate3 tasks={filteredTasks} assetName={assetNameForTemplate2} timelineWidth={800} viewMode={viewMode} />
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-sm text-slate-600">Zoom:</span>
+                        <button type="button" onClick={zoomOut} disabled={ganttColumnWidth <= GANTT_ZOOM_MIN} className="px-2 py-1 text-xs font-medium rounded border border-slate-300 bg-white disabled:opacity-50">Zoom out</button>
+                        <button type="button" onClick={zoomIn} disabled={ganttColumnWidth >= GANTT_ZOOM_MAX} className="px-2 py-1 text-xs font-medium rounded border border-slate-300 bg-white disabled:opacity-50">Zoom in</button>
+                      </div>
+                      <GanttChart
+                        tasks={ganttTasks}
+                        viewMode={viewMode}
+                        listCellWidth={`${listCellWidth}px`}
+                        phaseColumnWidth={phaseColumnWidth}
+                        columnWidth={ganttColumnWidth}
+                        showLegend={true}
+                      />
+                    </>
+                  )}
                 </div>
               </div>
             </div>

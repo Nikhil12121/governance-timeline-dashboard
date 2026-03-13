@@ -14,22 +14,21 @@ export type SlideType =
   | 'scenarios'
   | 'resource-demand'
 
-/** GSK cover slide: VIDRU Board/ DRB/ PIB with asset name, consultation type, date, project ID */
+/** GSK cover slide: board title, centered logo, asset line, owner, finance partner, date */
 export interface TitleSlide {
   type: 'title'
   id: string
   title: string
   subtitle?: string
-  /** Governance: main heading e.g. "VIDRU Board/ DRB/ PIB*" */
   boardHeading?: string
-  /** [ASSET- NAME] */
   assetName?: string
-  /** [Type of consultation] */
+  /** Full asset/project line in orange (e.g. "50987: GSK3772701- P falciparum...") */
+  assetDescriptionLine?: string
   consultationType?: string
-  /** [DD/MM/YYYY] */
   consultationDate?: string
-  /** [Project ID Code] */
   projectId?: string
+  ownerLine?: string
+  financePartner?: string
 }
 
 export interface TimelineSlide {

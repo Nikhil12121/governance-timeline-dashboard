@@ -20,10 +20,16 @@ export function mergeGovernanceDataIntoPresentation(
 
   const slides = presentation.slides.map((slide): Slide => {
     if (slide.type === 'title') {
+      const assetLine = withProjectTitle(
+        data.project.projectId,
+        data.project.assetName,
+        data.project.projectShortDescription ?? data.project.projectDescription
+      )
       return {
         ...slide,
         assetName: data.project.assetName,
         projectId: data.project.projectId,
+        assetDescriptionLine: assetLine || slide.assetDescriptionLine,
       }
     }
 

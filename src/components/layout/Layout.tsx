@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 
 const GSK_ORANGE = '#E87722'
 
@@ -12,7 +13,9 @@ export function Layout() {
       <div className="flex flex-1 min-h-0">
         <Sidebar open={sidebarOpen} onToggle={() => setSidebarOpen((o) => !o)} />
         <main className="flex-1 overflow-auto p-6">
-          <Outlet />
+          <ErrorBoundary>
+            <Outlet />
+          </ErrorBoundary>
         </main>
       </div>
     </div>

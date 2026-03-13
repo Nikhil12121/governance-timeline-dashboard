@@ -11,13 +11,16 @@ export const dummyPresentation: Presentation = {
     {
       type: 'title',
       id: 's1-title',
-      title: 'VIDRU Board/ DRB/ PIB*',
+      title: 'GHIB Board',
       subtitle: '*Only retain the Board relevant for your project',
-      boardHeading: 'VIDRU Board/ DRB/ PIB*',
+      boardHeading: 'GHIB Board',
       assetName: '[ASSET- NAME]',
+      assetDescriptionLine: '[Project ID]: [Asset name] – [Short description]',
       consultationType: '[Type of consultation]',
       consultationDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '/'),
       projectId: '[Project ID Code]',
+      ownerLine: '[Owner name] on behalf of [Team]',
+      financePartner: 'Finance partner: [Name]',
     },
     {
       type: 'consultation-objectives',
@@ -26,16 +29,15 @@ export const dummyPresentation: Presentation = {
       forDecision: [
         'Does VIDRU Board/DRB/PIB* approve….?',
         'the proposed scenario and associated timelines? Include level of confidence¹',
+        '', '', '',
       ],
       forInput: [
         'Team seeks VIDRU Board /DRB/PIB* input on',
-        'x',
-        'x',
+        '', '', '', '',
       ],
       forAwareness: [
         'Team is sharing for awareness:',
-        'x',
-        'x',
+        '', '', '', '',
       ],
     },
     {

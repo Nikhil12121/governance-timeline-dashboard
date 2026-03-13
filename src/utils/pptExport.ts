@@ -127,6 +127,11 @@ function addGanttImage(slide: PptxGenJS.Slide, timelineChartImage: string, y: nu
  * Export full presentation to a single PPTX file in GSK format.
  * Handles all slide types: title (GSK cover), consultation-objectives, timeline (Gantt image or table), financials-gantt, scenarios, resource-demand, content, summary.
  */
+const SLIDE_WIDTH = 10
+const SLIDE_HEIGHT = 5.625
+const GANTT_IMAGE_Y = 0.95
+const GANTT_IMAGE_H = 3.8
+
 export async function exportPresentationToPptx(
   presentation: Presentation,
   timelineTasks: TimelineTask[],
@@ -134,6 +139,8 @@ export async function exportPresentationToPptx(
   timelineChartImage?: string
 ): Promise<void> {
   const pptx = new PptxGenJS()
+  pptx.defineLayout({ name: 'LAYOUT_16_9', width: SLIDE_WIDTH, height: SLIDE_HEIGHT })
+  pptx.layout = 'LAYOUT_16_9'
   const fname = filename || presentation.filename || 'Governance-GSK.pptx'
   let pageNum = 0
 
@@ -142,83 +149,96 @@ export async function exportPresentationToPptx(
     const slide = pptx.addSlide()
 
     if (s.type === 'title') {
+      // gsk.com top-right
       slide.addText('gsk.com', {
         x: 8.2,
-        y: 0.2,
+        y: 0.08,
         w: 0.8,
-        h: 0.25,
+        h: 0.2,
         fontSize: 8,
         color: TEMPLATE.footerColor,
         align: 'right',
       })
+      // VIDRU Board/ DRB/ PIB* at very top of slide
       slide.addText(s.boardHeading ?? s.title, {
         x: 0.5,
-        y: 0.6,
-        w: 9,
+        y: 0.08,
+        w: 7.5,
         h: 0.4,
-        fontSize: 22,
+        fontSize: 20,
         bold: true,
         color: TEMPLATE.titleColor,
       })
-      slide.addShape('rect', {
+      // GSK – orange, centered, large logo text (no line below header; asset/date go right below GSK)
+      const gskY = 1.4
+      const gskH = 1.8
+      slide.addText('GSK', {
         x: 0.5,
-        y: 1.0,
+        y: gskY,
         w: 9,
-        h: 0.02,
-        fill: { color: 'cccccc' },
-      })
-      slide.addShape('rect', {
-        x: 0.5,
-        y: 1.4,
-        w: 0.15,
-        h: 0.2,
-        fill: { color: TEMPLATE.titleAccentColor },
-      })
-      slide.addText(s.assetName ?? '[ASSET- NAME]', {
-        x: 0.7,
-        y: 1.35,
-        w: 4,
-        h: 0.25,
-        fontSize: 16,
+        h: gskH,
+        fontSize: 120,
         bold: true,
         color: TEMPLATE.titleAccentColor,
+        align: 'center',
+        valign: 'middle',
       })
-      slide.addText(s.consultationType ?? '[Type of consultation]', {
-        x: 0.7,
-        y: 1.6,
-        w: 4,
-        h: 0.2,
+      // [ASSET- NAME] and date – in the space right below GSK (no lines), centered
+      const belowGskY = gskY + gskH + 0.12
+      const assetLine = (s as import('@/types/presentation').TitleSlide).assetDescriptionLine ?? s.assetName ?? '[ASSET- NAME]'
+      slide.addText(assetLine, {
+        x: 0.5,
+        y: belowGskY,
+        w: 9,
+        h: 0.35,
+        fontSize: 14,
+        bold: true,
+        color: TEMPLATE.titleColor,
+        align: 'center',
+        valign: 'middle',
+        shrinkText: true,
+      })
+      slide.addText(s.consultationDate ?? '12/03/2026', {
+        x: 0.5,
+        y: belowGskY + 0.45,
+        w: 9,
+        h: 0.3,
         fontSize: 12,
-        bold: true,
-        color: TEMPLATE.titleAccentColor,
-      })
-      slide.addText(s.consultationDate ?? '[DD/MM/YYYY]', {
-        x: 0.5,
-        y: 1.9,
-        w: 4,
-        h: 0.2,
-        fontSize: 11,
         color: TEMPLATE.titleColor,
+        align: 'center',
       })
-      slide.addText(s.projectId ?? '[Project ID Code]', {
-        x: 0.5,
-        y: 2.1,
-        w: 4,
-        h: 0.2,
-        fontSize: 11,
-        color: TEMPLATE.titleColor,
-      })
-      if (s.subtitle) {
-        slide.addText(s.subtitle, {
-          x: 6.5,
-          y: 2.0,
-          w: 3,
-          h: 0.5,
-          fontSize: 9,
-          italic: true,
-          color: 'cc0000',
+      const ownerLine = (s as import('@/types/presentation').TitleSlide).ownerLine ?? ''
+      if (ownerLine) {
+        slide.addText(ownerLine, {
+          x: 0.5,
+          y: 4.2,
+          w: 9,
+          h: 0.25,
+          fontSize: 11,
+          color: TEMPLATE.titleColor,
+          align: 'center',
         })
       }
+      const financePartner = (s as import('@/types/presentation').TitleSlide).financePartner ?? ''
+      if (financePartner) {
+        slide.addText(financePartner, {
+          x: 0.5,
+          y: 4.5,
+          w: 9,
+          h: 0.25,
+          fontSize: 11,
+          color: TEMPLATE.titleColor,
+          align: 'center',
+        })
+      }
+      slide.addShape('rect', {
+        x: 4.85,
+        y: 5.15,
+        w: 0.3,
+        h: 0.3,
+        fill: { color: TEMPLATE.titleAccentColor },
+        rotate: 45,
+      })
     } else if (s.type === 'consultation-objectives') {
       addTitleBlock(slide, s.title, { y: 0.25 })
       slide.addText('*Only retain the Board relevant for your project', {
@@ -318,7 +338,7 @@ export async function exportPresentationToPptx(
       const fullTitle = s.subtitle ? `${s.title} – ${s.subtitle}` : s.title
       addTitleBlock(slide, fullTitle, { y: 0.3 })
       if (timelineChartImage?.trim()) {
-        addGanttImage(slide, timelineChartImage, 0.95, 4.1)
+        addGanttImage(slide, timelineChartImage, GANTT_IMAGE_Y, GANTT_IMAGE_H)
       } else {
         addTimelineTable(slide, timelineTasks)
       }
@@ -352,7 +372,7 @@ export async function exportPresentationToPptx(
       let yCur = 0.85
       if (timelineChartImage?.trim()) {
         addGanttImage(slide, timelineChartImage, yCur, 2.2)
-        yCur += 2.35
+        yCur += 2.25
       }
       const cols = s.financialsYears.length
       const colW = 9 / Math.max(cols, 1)
