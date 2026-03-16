@@ -3,9 +3,11 @@ import type { Slide } from '@/types/presentation'
 import type { FinancialsGanttSlide as FinancialsGanttSlideType } from '@/types/presentation'
 import type { TimelineTask } from '@/types/timeline'
 import type { ViewMode } from '@/types/timeline'
+import type { MilestoneTimelineRow } from '@/types/milestoneTimeline'
 import { GanttChart } from '@/components/timeline/GanttChart'
 import { GanttChartTemplate2 } from '@/components/timeline/GanttChartTemplate2'
 import { GanttChartTemplate3 } from '@/components/timeline/GanttChartTemplate3'
+import { MilestoneGovernanceView } from '@/components/timeline/MilestoneGovernanceView'
 
 const GSK = {
   titleColor: '#1a1a1a',
@@ -83,6 +85,7 @@ export function SlidePreviewCard({
   assetNameLabel = '',
   phaseColumnWidth,
   listCellWidth,
+  milestoneTimelineRows,
 }: {
   slide: Slide
   pageNum: number
@@ -97,9 +100,13 @@ export function SlidePreviewCard({
   /** For template 1: use same Phase + Activity columns as Timeline & analysis (no From/To) */
   phaseColumnWidth?: number
   listCellWidth?: number
+  /** For template 1: Milestone & Governance rows (same as Timeline & data tab); when set, preview shows MilestoneGovernanceView */
+  milestoneTimelineRows?: MilestoneTimelineRow[]
 }) {
   const effectiveViewMode = viewMode ?? 'Month'
-  const hasChartData = templateId === 1 ? (ganttTasks && ganttTasks.length > 0) : (timelineTasks && timelineTasks.length > 0)
+  const hasChartData = templateId === 1
+    ? ((milestoneTimelineRows && milestoneTimelineRows.length > 0) || (ganttTasks && ganttTasks.length > 0))
+    : (timelineTasks && timelineTasks.length > 0)
   const showExpandGantt = onExpandGantt && (slide.type === 'timeline' || slide.type === 'financials-gantt') && hasChartData && (templateId === 1 ? effectiveViewMode : true)
 
   return (
@@ -177,6 +184,14 @@ export function SlidePreviewCard({
             ) : templateId === 3 && timelineTasks.length > 0 ? (
               <div className="flex-1 min-h-[320px] rounded-lg border border-slate-200 overflow-x-auto overflow-y-hidden bg-white">
                 <GanttChartTemplate3 tasks={timelineTasks} assetName={assetNameLabel} timelineWidth={520} viewMode={effectiveViewMode} />
+              </div>
+            ) : templateId === 1 && milestoneTimelineRows && milestoneTimelineRows.length > 0 ? (
+              <div className="flex-1 min-h-[320px] rounded-lg border border-slate-200 overflow-x-auto overflow-y-hidden bg-white">
+                <MilestoneGovernanceView
+                  rows={milestoneTimelineRows}
+                  assetName={assetNameLabel}
+                  viewMode={effectiveViewMode}
+                />
               </div>
             ) : ganttTasks && ganttTasks.length > 0 && effectiveViewMode ? (
               <div className="flex-1 min-h-[320px] rounded-lg border border-slate-200 overflow-x-auto overflow-y-hidden bg-white">
@@ -263,6 +278,10 @@ export function SlidePreviewCard({
           ) : templateId === 3 && timelineTasks.length > 0 ? (
             <div className="mt-2 flex-1 min-h-[220px] rounded-lg border border-slate-200 overflow-x-auto overflow-y-hidden bg-white">
               <GanttChartTemplate3 tasks={timelineTasks} assetName={assetNameLabel} timelineWidth={520} viewMode={effectiveViewMode} />
+            </div>
+          ) : templateId === 1 && milestoneTimelineRows && milestoneTimelineRows.length > 0 ? (
+            <div className="mt-2 flex-1 min-h-[220px] rounded-lg border border-slate-200 overflow-x-auto overflow-y-hidden bg-white">
+              <MilestoneGovernanceView rows={milestoneTimelineRows} assetName={assetNameLabel} viewMode={effectiveViewMode} />
             </div>
           ) : ganttTasks && ganttTasks.length > 0 && effectiveViewMode ? (
             <div className="mt-2 flex-1 min-h-[220px] rounded-lg border border-slate-200 overflow-x-auto overflow-y-hidden bg-white">

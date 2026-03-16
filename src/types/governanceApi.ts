@@ -1,5 +1,6 @@
 import type { FinancialsRow, ResourceDemandGroup } from '@/types/presentation'
 import type { TaskType } from '@/types/timeline'
+import type { MilestoneTimelineRow } from '@/types/milestoneTimeline'
 
 export interface AssetOption {
   projectKey: string
@@ -51,4 +52,6 @@ export interface GovernanceProjectData {
   timelineTasks: TimelineTaskDto[]
   financials: GovernanceFinancialsData
   resourceDemand: GovernanceResourceDemandData
+  /** When present, same structure as Power BI Milestone Timeline query; use for Milestones & Governance view instead of deriving from timelineTasks. */
+  milestoneTimelineRows?: MilestoneTimelineRow[]
 }

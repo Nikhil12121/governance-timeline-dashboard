@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { toPng, toCanvas } from 'html-to-image'
 import { usePresentation } from '@/context/PresentationContext'
 import { useTimeline } from '@/context/TimelineContext'
@@ -10,11 +10,13 @@ import { TimelineFilters } from '@/components/timeline/TimelineFilters'
 import { GanttChart } from '@/components/timeline/GanttChart'
 import { GanttChartTemplate2 } from '@/components/timeline/GanttChartTemplate2'
 import { GanttChartTemplate3 } from '@/components/timeline/GanttChartTemplate3'
+import { MilestoneGovernanceView } from '@/components/timeline/MilestoneGovernanceView'
 import { EditContextModal } from '@/components/timeline/EditContextModal'
 import { SlidePreviewCard } from '@/components/presentation/SlidePreview'
 import { GSK_THEME } from '@/theme/gsk'
 import type { AssetOption } from '@/types/governanceApi'
 import { mergeGovernanceDataIntoPresentation } from '@/utils/governanceData'
+import { timelineTasksToMilestoneRows } from '@/utils/milestoneTimelineData'
 
 const GSK_ORANGE = GSK_THEME.accentColor
 
@@ -60,6 +62,7 @@ export function GovernancePPTPage({ templateId = 1 }: GovernancePPTPageProps) {
   const [loadingProjectData, setLoadingProjectData] = useState(false)
   const [dataError, setDataError] = useState<string | null>(null)
   const [lastLoadedProjectLabel, setLastLoadedProjectLabel] = useState<string | null>(null)
+  const [milestoneTimelineRowsFromApi, setMilestoneTimelineRowsFromApi] = useState<import('@/types/milestoneTimeline').MilestoneTimelineRow[]>([])
   const [loadingConsultationAi, setLoadingConsultationAi] = useState(false)
   const [consultationAiError, setConsultationAiError] = useState<string | null>(null)
   const [loadingSummaryAi, setLoadingSummaryAi] = useState(false)
@@ -101,6 +104,19 @@ export function GovernancePPTPage({ templateId = 1 }: GovernancePPTPageProps) {
     resizeStartRef.current = { x: e.clientX, width: listCellWidth, kind: 'name' }
     attachResizeListeners()
   }
+
+  const effectiveMilestoneRows = useMemo(() => {
+    if (milestoneTimelineRowsFromApi.length > 0) {
+      if (dateRange?.start && dateRange?.end) {
+        return milestoneTimelineRowsFromApi.filter((r) => {
+          const d = new Date(r.reportedDate).getTime()
+          return d >= dateRange.start.getTime() && d <= dateRange.end.getTime()
+        })
+      }
+      return milestoneTimelineRowsFromApi
+    }
+    return timelineTasksToMilestoneRows(filteredTasks, selectedProjectKey || '', lastLoadedProjectLabel ?? undefined, lastLoadedProjectLabel ?? undefined)
+  }, [milestoneTimelineRowsFromApi, dateRange, filteredTasks, selectedProjectKey, lastLoadedProjectLabel])
 
   const titleSlide = presentation.slides.find((s) => s.type === 'title')
   const consultationSlide = presentation.slides.find((s) => s.type === 'consultation-objectives')
@@ -149,6 +165,7 @@ export function GovernancePPTPage({ templateId = 1 }: GovernancePPTPageProps) {
       const data = await fetchGovernanceProjectData(selectedProjectKey)
       const nextPresentation = mergeGovernanceDataIntoPresentation(presentation, data)
       setTasks(data.timelineTasks)
+      setMilestoneTimelineRowsFromApi(data.milestoneTimelineRows ?? [])
       setPresentation(nextPresentation)
       setFilename(nextPresentation.filename)
       setLastLoadedProjectLabel(`${data.project.assetName} (${data.project.projectId})`)
@@ -193,7 +210,11 @@ export function GovernancePPTPage({ templateId = 1 }: GovernancePPTPageProps) {
           typeof body === 'string' &&
           (body.startsWith('Summary could not be generated') || body.includes('Ensure Azure OpenAI is configured'))
         if (isErrorResponse) {
-          setSummaryAiError(body.includes('Azure OpenAI error:') ? body : 'AI not configured; using timeline-based summary.')
+          setSummaryAiError(
+            body.includes('Azure OpenAI error:')
+              ? body
+              : 'AI summary not available. Add AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY to .env in the project root, then restart the server (npm run server). Using timeline-based summary for now.'
+          )
           const summaryText = generateTimelineSummary(filteredTasks)
           if (summarySlide) updateSlide(summarySlide.id, { body: summaryText })
         } else if (summarySlide) {
@@ -597,28 +618,18 @@ export function GovernancePPTPage({ templateId = 1 }: GovernancePPTPageProps) {
               dateRange={dateRange}
               setDateRange={setDateRange}
             />
-            {templateId === 1 && (
-              <div className="flex items-center gap-3 mb-2">
-                <span className="text-xs text-slate-500">Gantt zoom:</span>
-                <button type="button" onClick={zoomOut} disabled={ganttColumnWidth <= GANTT_ZOOM_MIN} className="px-2 py-1 text-xs font-medium rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed" title="Zoom out">Zoom out</button>
-                <button type="button" onClick={zoomIn} disabled={ganttColumnWidth >= GANTT_ZOOM_MAX} className="px-2 py-1 text-xs font-medium rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed" title="Zoom in">Zoom in</button>
-              </div>
-            )}
             {templateId === 2 ? (
               <GanttChartTemplate2 tasks={filteredTasks} financialsSlide={financialsGanttSlide?.type === 'financials-gantt' ? financialsGanttSlide : null} assetName={assetNameForTemplate2} subtitle={financialsGanttSlide?.type === 'financials-gantt' ? financialsGanttSlide.subtitle : undefined} viewMode={viewMode} />
             ) : templateId === 3 ? (
               <GanttChartTemplate3 tasks={filteredTasks} assetName={assetNameForTemplate2} timelineWidth={640} viewMode={viewMode} />
             ) : (
-              <>
-                <p className="text-xs text-slate-500 mb-2">Drag the thin line in the header to resize the Phase / milestone and Activity columns. Scroll horizontally if the timeline is wide.</p>
-                <div className="relative max-w-full overflow-x-auto overflow-y-hidden rounded-lg border border-slate-200 bg-white">
-                  <div className="relative min-w-0">
-                    <div role="separator" aria-label="Resize Phase column" onMouseDown={onResizePhase} className="absolute top-0 z-20 h-10 w-px cursor-col-resize hover:bg-orange-400 bg-slate-400 transition-colors touch-none" style={{ left: phaseColumnWidth, transform: 'translateX(-50%)' }} />
-                    <div role="separator" aria-label="Resize Activity column" onMouseDown={onResizeName} className="absolute top-0 z-20 h-10 w-px cursor-col-resize hover:bg-orange-400 bg-slate-400 transition-colors touch-none" style={{ left: phaseColumnWidth + listCellWidth, transform: 'translateX(-50%)' }} />
-                    <GanttChart tasks={ganttTasks} viewMode={viewMode} listCellWidth={`${listCellWidth}px`} phaseColumnWidth={phaseColumnWidth} columnWidth={ganttColumnWidth} onDoubleClickTask={handleDoubleClickTask} onDateChange={onTaskDateChange} />
-                  </div>
-                </div>
-              </>
+              <div className="max-w-full overflow-x-auto">
+                <MilestoneGovernanceView
+                  rows={effectiveMilestoneRows}
+                  assetName={lastLoadedProjectLabel ?? undefined}
+                  viewMode={viewMode}
+                />
+              </div>
             )}
             {timelineSlide && (
               <label className="block mt-4">
@@ -738,6 +749,7 @@ export function GovernancePPTPage({ templateId = 1 }: GovernancePPTPageProps) {
                     assetNameLabel={assetNameForTemplate2}
                     phaseColumnWidth={phaseColumnWidth}
                     listCellWidth={listCellWidth}
+                    milestoneTimelineRows={templateId === 1 && (slide.type === 'timeline' || slide.type === 'financials-gantt') ? effectiveMilestoneRows : undefined}
                   />
                 </div>
               ))}
@@ -777,21 +789,13 @@ export function GovernancePPTPage({ templateId = 1 }: GovernancePPTPageProps) {
                   ) : templateId === 3 ? (
                     <GanttChartTemplate3 tasks={filteredTasks} assetName={assetNameForTemplate2} timelineWidth={800} viewMode={viewMode} />
                   ) : (
-                    <>
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-sm text-slate-600">Zoom:</span>
-                        <button type="button" onClick={zoomOut} disabled={ganttColumnWidth <= GANTT_ZOOM_MIN} className="px-2 py-1 text-xs font-medium rounded border border-slate-300 bg-white disabled:opacity-50">Zoom out</button>
-                        <button type="button" onClick={zoomIn} disabled={ganttColumnWidth >= GANTT_ZOOM_MAX} className="px-2 py-1 text-xs font-medium rounded border border-slate-300 bg-white disabled:opacity-50">Zoom in</button>
-                      </div>
-                      <GanttChart
-                        tasks={ganttTasks}
+                    <div className="max-w-full overflow-x-auto">
+                      <MilestoneGovernanceView
+                        rows={effectiveMilestoneRows}
+                        assetName={lastLoadedProjectLabel ?? undefined}
                         viewMode={viewMode}
-                        listCellWidth={`${listCellWidth}px`}
-                        phaseColumnWidth={phaseColumnWidth}
-                        columnWidth={ganttColumnWidth}
-                        showLegend={true}
                       />
-                    </>
+                    </div>
                   )}
                 </div>
               </div>

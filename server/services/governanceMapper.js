@@ -105,11 +105,12 @@ export function buildAssetOptions(projectRows) {
   }))
 }
 
-export function buildGovernanceResponse(projectRow, actualRows, forecastRows, timelineTasks, roleLabels) {
+export function buildGovernanceResponse(projectRow, actualRows, forecastRows, timelineTasks, roleLabels, milestoneTimelineRows = []) {
   return {
     project: projectRow,
     timelineTasks,
     financials: buildFinancials(actualRows, forecastRows),
     resourceDemand: buildResourceDemand(forecastRows, roleLabels),
+    milestoneTimelineRows: Array.isArray(milestoneTimelineRows) ? milestoneTimelineRows : [],
   }
 }

@@ -114,6 +114,36 @@ function mapRoleRow(row) {
   }
 }
 
+/** Map Milestone Timeline query row to frontend shape (same as Power BI: Parent, Task Code, Task Short Description, etc.). */
+function mapMilestoneTimelineRow(row) {
+  const normalized = normalizeRecord(row)
+  const projectKey = String(firstValue(normalized, ['Project Key', 'PROJECT KEY']) ?? '')
+  const parent = String(firstValue(normalized, ['Parent', 'PARENT']) ?? '')
+  const taskCode = String(firstValue(normalized, ['Task Code', 'TASK CODE']) ?? '')
+  const taskShortDescription = String(firstValue(normalized, ['Task Short Description', 'TASK SHORT DESCRIPTION']) ?? '')
+  const reportedDate = firstValue(normalized, ['Reported Date', 'REPORTED DATE'])
+  const minDate = firstValue(normalized, ['Min Task Reported Date', 'MIN TASK REPORTED DATE'])
+  const maxDate = firstValue(normalized, ['Max Task Reported Date', 'MAX TASK REPORTED DATE'])
+  const itemType = String(firstValue(normalized, ['Item Type', 'ITEM TYPE']) ?? '')
+  const milestoneCategory = String(firstValue(normalized, ['Milestone Category', 'MILESTONE CATEGORY']) ?? 'Other')
+  const planCategory = String(firstValue(normalized, ['Plan Category', 'PLAN CATEGORY']) ?? 'Current')
+  const assetProgram = firstValue(normalized, ['Asset/Program', 'ASSET/PROGRAM'])
+  const formatDate = (d) => (d == null ? '' : typeof d === 'string' ? d.slice(0, 10) : new Date(d).toISOString().slice(0, 10))
+  return {
+    projectKey,
+    itemTaskCode: taskCode,
+    parent,
+    taskShortDescription,
+    reportedDate: formatDate(reportedDate),
+    minTaskReportedDate: formatDate(minDate),
+    maxTaskReportedDate: formatDate(maxDate),
+    itemType: itemType || 'Project - Current',
+    milestoneCategory: milestoneCategory || 'Other',
+    planCategory,
+    assetProgram: assetProgram != null ? String(assetProgram) : undefined,
+  }
+}
+
 function executeQuery(connection, sql) {
   return new Promise((resolve, reject) => {
     connection.execute({
@@ -200,20 +230,24 @@ export function createSnowflakeRepository() {
 
     async getGovernanceProjectData(projectKey) {
       return withConnection(async (connection) => {
-        const [projectSql, actualSql, forecastSql, timelineSql] = await Promise.all([
+        const [projectSql, actualSql, forecastSql, timelineSql, milestoneTimelineSql] = await Promise.all([
           readSqlFile('projectSummary.sql'),
           readSqlFile('actuals.sql'),
           readSqlFile('forecast.sql'),
           readSqlFile('timeline.sql'),
+          readSqlFile('milestoneTimeline.sql').catch(() => null),
         ])
 
         const params = { projectKey }
-        const [projectRows, actualRows, forecastRows, timelineRows, roleLabels] = await Promise.all([
+        const [projectRows, actualRows, forecastRows, timelineRows, roleLabels, milestoneTimelineRows] = await Promise.all([
           executeQuery(connection, applySqlParams(projectSql, params)),
           executeQuery(connection, applySqlParams(actualSql, params)),
           executeQuery(connection, applySqlParams(forecastSql, params)),
           executeQuery(connection, applySqlParams(timelineSql, params)),
           loadRoleLabels(connection),
+          milestoneTimelineSql
+            ? executeQuery(connection, applySqlParams(milestoneTimelineSql, params)).then((rows) => rows.map(mapMilestoneTimelineRow)).catch(() => [])
+            : Promise.resolve([]),
         ])
 
         const project = projectRows.map(mapProjectRow).find((row) => row.projectKey === String(projectKey))
@@ -227,7 +261,8 @@ export function createSnowflakeRepository() {
           actualRows.map(mapActualRow),
           forecastRows.map(mapForecastRow),
           timelineRows.map(mapTimelineRow),
-          roleLabels
+          roleLabels,
+          milestoneTimelineRows
         )
       })
     },
