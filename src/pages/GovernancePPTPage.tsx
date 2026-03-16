@@ -188,8 +188,11 @@ export function GovernancePPTPage({ templateId = 1 }: GovernancePPTPageProps) {
         return a.slice(0, 10)
       }
       updateSlide(consultationSlide.id, {
+        ...(result.forDecisionIntro != null && { forDecisionIntro: result.forDecisionIntro }),
         forDecision: pad(result.forDecision),
+        ...(result.forInputIntro != null && { forInputIntro: result.forInputIntro }),
         forInput: pad(result.forInput),
+        ...(result.forAwarenessIntro != null && { forAwarenessIntro: result.forAwarenessIntro }),
         forAwareness: pad(result.forAwareness),
       })
     } catch (e) {
@@ -544,6 +547,9 @@ export function GovernancePPTPage({ templateId = 1 }: GovernancePPTPageProps) {
               <p className="text-sm text-slate-600 mb-4">Minimum 5 lines per section. You can add blank lines and free-form text; line breaks are preserved.</p>
               <label className="block mb-4">
                 <span className="text-sm font-medium text-slate-700">For Decision (min 5 points)</span>
+                {consultationSlide.forDecisionIntro && (
+                  <p className="mt-1 text-xs text-slate-600 italic">{consultationSlide.forDecisionIntro}</p>
+                )}
                 <textarea
                   value={consultationSlide.forDecision.join('\n')}
                   onChange={(e) => {
@@ -558,6 +564,9 @@ export function GovernancePPTPage({ templateId = 1 }: GovernancePPTPageProps) {
               </label>
               <label className="block mb-4">
                 <span className="text-sm font-medium text-slate-700">For Input (min 5 points)</span>
+                {consultationSlide.forInputIntro && (
+                  <p className="mt-1 text-xs text-slate-600 italic">{consultationSlide.forInputIntro}</p>
+                )}
                 <textarea
                   value={consultationSlide.forInput.join('\n')}
                   onChange={(e) => {
@@ -572,6 +581,9 @@ export function GovernancePPTPage({ templateId = 1 }: GovernancePPTPageProps) {
               </label>
               <label className="block">
                 <span className="text-sm font-medium text-slate-700">For Awareness (min 5 points)</span>
+                {consultationSlide.forAwarenessIntro && (
+                  <p className="mt-1 text-xs text-slate-600 italic">{consultationSlide.forAwarenessIntro}</p>
+                )}
                 <textarea
                   value={consultationSlide.forAwareness.join('\n')}
                   onChange={(e) => {

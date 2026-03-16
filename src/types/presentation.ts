@@ -53,13 +53,16 @@ export interface SummarySlide {
   body: string
 }
 
-/** Why does the Team consult VIDRU Board/ DRB/ PIB – For Decision / For Input / For Awareness */
+/** Why does the Team consult VIDRU Board/ DRB/ PIB – For Decision / For Input / For Awareness (Akash: optional intro line per section) */
 export interface ConsultationObjectivesSlide {
   type: 'consultation-objectives'
   id: string
   title: string
+  forDecisionIntro?: string
   forDecision: string[]
+  forInputIntro?: string
   forInput: string[]
+  forAwarenessIntro?: string
   forAwareness: string[]
 }
 

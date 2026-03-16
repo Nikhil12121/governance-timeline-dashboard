@@ -265,6 +265,14 @@ export async function exportPresentationToPptx(
           })
         })
       }
+      const sectionWithIntro = (intro: string | undefined, arr: string[], x: number, y: number) => {
+        if (intro?.trim()) {
+          slide.addText(intro.trim(), { x, y, w: 7.5, h: 0.2, fontSize: 10, bold: true, valign: 'top', wrap: true })
+          bullets(arr, x, y + 0.2)
+        } else {
+          bullets(arr, x, y)
+        }
+      }
       slide.addShape('rect', {
         x: 0.5,
         y: 0.95,
@@ -283,7 +291,7 @@ export async function exportPresentationToPptx(
         align: 'center',
         valign: 'middle',
       })
-      bullets(s.forDecision, 1.8, 0.95)
+      sectionWithIntro(s.forDecisionIntro, s.forDecision, 1.8, 0.95)
 
       slide.addShape('rect', {
         x: 0.5,
@@ -303,7 +311,7 @@ export async function exportPresentationToPptx(
         align: 'center',
         valign: 'middle',
       })
-      bullets(s.forInput, 1.8, 1.55)
+      sectionWithIntro(s.forInputIntro, s.forInput, 1.8, 1.55)
 
       slide.addShape('rect', {
         x: 0.5,
@@ -323,7 +331,7 @@ export async function exportPresentationToPptx(
         align: 'center',
         valign: 'middle',
       })
-      bullets(s.forAwareness, 1.8, 2.15)
+      sectionWithIntro(s.forAwarenessIntro, s.forAwareness, 1.8, 2.15)
 
       slide.addText('1. Include team level of confidence (%) in operational delivery of the next business milestone as per the proposed plan (see slide notes for guidance)', {
         x: 0.5,

@@ -135,21 +135,30 @@ export function SlidePreviewCard({
           <div className="grid grid-cols-1 gap-3 text-base flex-1 min-h-0 min-w-0 overflow-auto">
             <div className="flex border border-slate-200 rounded-lg overflow-hidden min-w-0">
               <div className="w-28 shrink-0 py-3 px-3 text-white font-semibold text-center text-sm" style={{ backgroundColor: GSK.accentColor }}>For Decision</div>
-              <ul className="py-3 px-4 list-disc list-inside flex-1 min-w-0 bg-white space-y-1 break-words overflow-hidden">
-                {(Array.isArray((slide as import('@/types/presentation').ConsultationObjectivesSlide).forDecision) ? (slide as import('@/types/presentation').ConsultationObjectivesSlide).forDecision : []).map((b, i) => <li key={i} className="break-words">{b || '\u00A0'}</li>)}
-              </ul>
+              <div className="py-3 px-4 flex-1 min-w-0 bg-white overflow-hidden">
+                {(slide as import('@/types/presentation').ConsultationObjectivesSlide).forDecisionIntro && <p className="text-sm font-medium text-slate-700 mb-1">{(slide as import('@/types/presentation').ConsultationObjectivesSlide).forDecisionIntro}</p>}
+                <ul className="list-disc list-inside space-y-1 break-words">
+                  {(Array.isArray((slide as import('@/types/presentation').ConsultationObjectivesSlide).forDecision) ? (slide as import('@/types/presentation').ConsultationObjectivesSlide).forDecision : []).map((b, i) => <li key={i} className="break-words">{b || '\u00A0'}</li>)}
+                </ul>
+              </div>
             </div>
             <div className="flex border border-slate-200 rounded-lg overflow-hidden min-w-0">
               <div className="w-28 shrink-0 py-3 px-3 text-white font-semibold text-center text-sm" style={{ backgroundColor: GSK.accentColor }}>For Input</div>
-              <ul className="py-3 px-4 list-disc list-inside flex-1 min-w-0 bg-white space-y-1 break-words overflow-hidden">
-                {(Array.isArray((slide as import('@/types/presentation').ConsultationObjectivesSlide).forInput) ? (slide as import('@/types/presentation').ConsultationObjectivesSlide).forInput : []).map((b, i) => <li key={i} className="break-words">{b || '\u00A0'}</li>)}
-              </ul>
+              <div className="py-3 px-4 flex-1 min-w-0 bg-white overflow-hidden">
+                {(slide as import('@/types/presentation').ConsultationObjectivesSlide).forInputIntro && <p className="text-sm font-medium text-slate-700 mb-1">{(slide as import('@/types/presentation').ConsultationObjectivesSlide).forInputIntro}</p>}
+                <ul className="list-disc list-inside space-y-1 break-words">
+                  {(Array.isArray((slide as import('@/types/presentation').ConsultationObjectivesSlide).forInput) ? (slide as import('@/types/presentation').ConsultationObjectivesSlide).forInput : []).map((b, i) => <li key={i} className="break-words">{b || '\u00A0'}</li>)}
+                </ul>
+              </div>
             </div>
             <div className="flex border border-slate-200 rounded-lg overflow-hidden min-w-0">
               <div className="w-28 shrink-0 py-3 px-3 text-white font-semibold text-center text-sm" style={{ backgroundColor: GSK.accentColor }}>For Awareness</div>
-              <ul className="py-3 px-4 list-disc list-inside flex-1 min-w-0 bg-white space-y-1 break-words overflow-hidden">
-                {(Array.isArray((slide as import('@/types/presentation').ConsultationObjectivesSlide).forAwareness) ? (slide as import('@/types/presentation').ConsultationObjectivesSlide).forAwareness : []).map((b, i) => <li key={i} className="break-words">{b || '\u00A0'}</li>)}
-              </ul>
+              <div className="py-3 px-4 flex-1 min-w-0 bg-white overflow-hidden">
+                {(slide as import('@/types/presentation').ConsultationObjectivesSlide).forAwarenessIntro && <p className="text-sm font-medium text-slate-700 mb-1">{(slide as import('@/types/presentation').ConsultationObjectivesSlide).forAwarenessIntro}</p>}
+                <ul className="list-disc list-inside space-y-1 break-words">
+                  {(Array.isArray((slide as import('@/types/presentation').ConsultationObjectivesSlide).forAwareness) ? (slide as import('@/types/presentation').ConsultationObjectivesSlide).forAwareness : []).map((b, i) => <li key={i} className="break-words">{b || '\u00A0'}</li>)}
+                </ul>
+              </div>
             </div>
           </div>
           <p className="text-sm mt-2 shrink-0" style={{ color: GSK.footerColor }}>1. Include team level of confidence (%) in operational delivery of the next business milestone as per the proposed plan (see slide notes for guidance)</p>

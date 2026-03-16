@@ -26,19 +26,15 @@ export const dummyPresentation: Presentation = {
       type: 'consultation-objectives',
       id: 's2-consultation',
       title: 'Why does the Team consult VIDRU Board/ DRB/ PIB *?',
+      forDecisionIntro: 'Does VIDRU Board/DRB/PIB* approve….?',
       forDecision: [
-        'Does VIDRU Board/DRB/PIB* approve….?',
         'the proposed scenario and associated timelines? Include level of confidence¹',
-        '', '', '',
-      ],
-      forInput: [
-        'Team seeks VIDRU Board /DRB/PIB* input on',
         '', '', '', '',
       ],
-      forAwareness: [
-        'Team is sharing for awareness:',
-        '', '', '', '',
-      ],
+      forInputIntro: 'Team seeks VIDRU Board /DRB/PIB* input on',
+      forInput: ['', '', '', '', ''],
+      forAwarenessIntro: 'Team is sharing for awareness:',
+      forAwareness: ['', '', '', '', ''],
     },
     {
       type: 'timeline',

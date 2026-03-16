@@ -48,8 +48,11 @@ export async function fetchGovernanceProjectData(
 }
 
 export interface ConsultationAnalysis {
+  forDecisionIntro?: string
   forDecision: string[]
+  forInputIntro?: string
   forInput: string[]
+  forAwarenessIntro?: string
   forAwareness: string[]
 }
 
