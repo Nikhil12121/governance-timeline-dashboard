@@ -83,11 +83,68 @@ WITH cte_project_milestone AS (
   WHERE prm."Task Short Description" IN ('C2PH2B', 'AprvEU', 'C2PhIII', 'LastPatVisit', 'MAA', 'NDA', 'AprovUS', 'PhIIIStart', 'PoC', 'PoCOnset', 'PoCRes', 'ApproveJNDA', 'ApproveCHN', 'C2FL', 'C2FTIH', 'FDIH', 'FirstPhIIDose', 'LaunchCHN', 'LaunchEU', 'LaunchJNDA', 'LaunchUS', 'PivotalResults', 'SubmitCHN', 'SubmitJNDA', 'EoPhIIMtg', '1stINDsub', 'C2C', 'C2PH2A')
     AND prm."Reported Date" >= '2021-01-01'
 ),
+cte_study_milestone AS (
+  -- Study milestones for projects that already exist in cte_project_milestone (same project key filter).
+  SELECT DISTINCT
+    pr.project_key AS "Project Key",
+    COALESCE(pr.project_legacy_code, pr.project_code) AS "Project Alternate ID",
+    pr.project_status AS "Project Status",
+    CONCAT(cs.clinical_study_code, '-', cs.clinical_study_description) AS "Task Code",
+    CONCAT(pr.project_code, '-', pr.project_short_description) AS "Parent",
+    CASE
+      WHEN ta.task_type_code = 'DBF_FINAL' THEN 'DBL'
+      WHEN ta.task_type_code = 'DBL_FINAL' THEN 'DBL'
+      WHEN ta.task_type_code = 'LSLV_FINAL' THEN 'LSLV'
+      WHEN ta.task_type_code = 'SAC_FINAL' THEN 'SAC'
+      WHEN ta.task_type_code = 'SAC_PRIM' THEN 'pSAC'
+      WHEN ta.task_type_code = 'DBL_PRIM' THEN 'pDBL'
+      ELSE ta.task_type_code
+    END AS "Task Short Description",
+    COALESCE(ta.task_actual_end_date, ta.task_planned_end_date) AS "Reported Date",
+    YEAR(COALESCE(ta.task_actual_end_date, ta.task_planned_end_date)) AS "Reported Date Year",
+    cs.clinical_study_primary_asset AS "Project Active Substance Asset Reported Name",
+    cs.clinical_study_primary_asset AS "Asset/Program",
+    'Study' AS "Type",
+    'Study Milestones' AS "Milestone Category",
+    CASE
+      -- Match Power BI behaviour: only use Approved Governance Baseline when not overridden.
+      WHEN pl.plan_category = 'Approved Governance Baseline' THEN NULL
+      ELSE pl.plan_category
+    END AS "Plan Category"
+  FROM irm.f_estimated_effort AS fe
+  JOIN cte_project_milestone AS cte_prm
+    ON fe.project_key = cte_prm."Project Key"
+  JOIN irm.d_project AS pr
+    ON fe.project_key = pr.project_key
+  JOIN irm.d_plan AS pl
+    ON fe.plan_key = pl.plan_key
+  JOIN irm.d_clinical_study AS cs
+    ON fe.clinical_study_key = cs.clinical_study_key
+  JOIN irm.d_task AS ta
+    ON fe.task_key = ta.task_key
+  WHERE fe.data_origin = 'PLW_ACTIVITY'
+    AND pl.plan_category IN ('Current', 'Approved Governance Baseline')
+    AND pl.plan_state IN ('Active')
+    AND pl.plan_baseline_flag IS NULL
+    AND pl.plan_version_number = 0
+    AND pl.plan_type_name IN ('MDP', 'CSAP')
+    AND ta.task_source = 'PLW-NEW'
+    AND ta.task_scope_name = 'Study Milestone'
+    AND ta.task_type_code IN ('CPA', 'FPA', 'FSFV', 'LSFV', 'LSLV_FINAL', 'DBL_FINAL', 'SAC_FINAL')
+    AND ta.task_planned_end_date >= '2021-01-01'
+),
 prm_dates AS (
   SELECT "Task Code", "Plan Category",
     MIN("Reported Date") AS "Min Task Reported Date",
     MAX("Reported Date") AS "Max Task Reported Date"
   FROM cte_project_milestone
+  GROUP BY "Task Code", "Plan Category"
+),
+stm_dates AS (
+  SELECT "Task Code", "Plan Category",
+    MIN("Reported Date") AS "Min Task Reported Date",
+    MAX("Reported Date") AS "Max Task Reported Date"
+  FROM cte_study_milestone
   GROUP BY "Task Code", "Plan Category"
 )
 SELECT
@@ -116,4 +173,31 @@ SELECT
   prm."First Launch Date"
 FROM cte_project_milestone AS prm
 JOIN prm_dates ON prm."Task Code" = prm_dates."Task Code" AND prm."Plan Category" = prm_dates."Plan Category"
+UNION ALL
+SELECT
+  stm."Project Key",
+  stm."Project Alternate ID",
+  stm."Project Status",
+  stm."Task Code" || ' - ' || stm."Plan Category" AS "Task Code",
+  stm."Parent" || ' - ' || stm."Plan Category" AS "Parent",
+  stm."Task Short Description",
+  stm."Reported Date",
+  stm."Reported Date Year",
+  stm."Project Active Substance Asset Reported Name" || ' - ' || stm."Plan Category" AS "Project Active Substance Asset Reported Name",
+  stm."Asset/Program" || ' - ' || stm."Plan Category" AS "Asset/Program",
+  stm."Type",
+  stm."Type" || ' - ' || stm."Plan Category" AS "Item Type",
+  stm."Milestone Category",
+  stm."Plan Category",
+  stm_dates."Min Task Reported Date",
+  stm_dates."Max Task Reported Date",
+  CAST(CASE
+    WHEN stm_dates."Max Task Reported Date" <= CURRENT_DATE() THEN 1
+    WHEN stm_dates."Max Task Reported Date" = stm_dates."Min Task Reported Date" OR stm_dates."Min Task Reported Date" > CURRENT_DATE() THEN 0
+    ELSE DATEDIFF('day', stm_dates."Min Task Reported Date", CURRENT_DATE()) * 1.0 / NULLIF(DATEDIFF('day', stm_dates."Min Task Reported Date", stm_dates."Max Task Reported Date"), 0)
+  END AS DECIMAL(18,2)) AS "Timeline Progress",
+  NULL AS "First Submission Date",
+  NULL AS "First Launch Date"
+FROM cte_study_milestone AS stm
+JOIN stm_dates ON stm."Task Code" = stm_dates."Task Code" AND stm."Plan Category" = stm_dates."Plan Category"
 ORDER BY "Parent", "Task Code", "Reported Date";
