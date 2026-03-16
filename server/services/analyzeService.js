@@ -1,52 +1,74 @@
 /**
- * GenAI analysis: consultation rationale and summary from governance data.
- * Uses Azure OpenAI; falls back to defaults if not configured or on error.
+ * GenAI analysis: consultation (Decision / Input / Awareness) and summary.
+ * Uses your Azure OpenAI endpoint and API key only – no proxy, no workaround.
+ * Analyzes: selected timeline data, project metadata, and cost/FTE (financials).
  */
 import { chatCompletion } from './azureOpenAI.js'
 
-function buildContextFromGovernance(data) {
+/** Build rich context from governance data: project metadata, selected timeline, cost/FTE. */
+function buildContextFromGovernance(data, visibleTimelineSummary = '') {
   if (!data) return ''
   const parts = []
+
   if (data.project) {
-    parts.push(`Project: ${data.project.projectId} - ${data.project.assetName}. ${data.project.projectShortDescription || data.project.projectDescription || ''}. Phase: ${data.project.currentPhase || '—'}. Status: ${data.project.projectStatus || '—'}.`)
+    const p = data.project
+    parts.push(
+      `Project metadata: ID ${p.projectId || '—'}, Asset ${p.assetName || '—'}. ${p.projectShortDescription || p.projectDescription || ''}. Phase: ${p.currentPhase || '—'}. Status: ${p.projectStatus || '—'}.`
+    )
   }
+
   if (data.timelineTasks && data.timelineTasks.length > 0) {
-    const tasks = data.timelineTasks.slice(0, 20).map((t) => `${t.name} (${t.phase || '—'}): ${t.start}–${t.end}`).join('; ')
-    parts.push(`Timeline: ${tasks}.`)
+    const tasks = data.timelineTasks.slice(0, 25).map(
+      (t) =>
+        `${t.name} (${t.phase || '—'}): ${typeof t.start === 'string' ? t.start : t.start?.toISOString?.()?.slice(0, 10) || '—'}–${typeof t.end === 'string' ? t.end : t.end?.toISOString?.()?.slice(0, 10) || '—'}${t.isCritical ? ' [critical]' : ''}`
+    )
+    parts.push(`Timeline tasks: ${tasks.join('; ')}.`)
   }
-  if (data.financials && data.financials.rows?.length > 0) {
-    const row = data.financials.rows[0]
-    const vals = row.values ? row.values.slice(0, 5).join(', ') : ''
-    parts.push(`Financials (${row.label || 'summary'}): ${vals}.`)
+
+  if (visibleTimelineSummary && String(visibleTimelineSummary).trim()) {
+    parts.push(`User-selected timeline summary (base your analysis on this):\n${String(visibleTimelineSummary).trim()}`)
   }
-  return parts.join(' ')
+
+  if (data.financials && (data.financials.rows?.length > 0 || data.financials.yearHeaders?.length > 0)) {
+    const headers = data.financials.yearHeaders || []
+    const headerLine = headers.length ? `Years: ${headers.join(', ')}` : ''
+    const rows = (data.financials.rows || []).map((r) => {
+      const vals = (r.values || []).map(String).join(', ')
+      return `${r.label || 'Row'}: ${vals}`
+    })
+    parts.push(`Cost / FTE / financials. ${headerLine}. ${rows.join('. ')}`)
+  }
+
+  return parts.join('\n\n')
 }
 
-// Akash-style: pharma governance communications specialist; formal, crisp, slide-ready; return intros + bullets (see docs/AKASH-LLM-LOGIC.md)
-const CONSULTATION_SYSTEM = `You are a pharma governance communications specialist supporting pharmaceutical project managers.
+const CONSULTATION_SYSTEM = `You are a pharma governance communications specialist for VIDRU Board/DRB/PIB.
 
-Your task is to produce governance-slide wording for a board review slide (VIDRU Board/DRB/PIB).
+Task: From the provided project metadata, selected timeline, and cost/FTE data, produce exactly three sections for "Why does the Team consult the Board?"
 
 Rules:
-- Tone: formal, crisp, leadership-ready, decision-oriented.
-- "For Decision": one short intro line (e.g. "Does the Board endorse:") then board-facing approval/endorsement bullets.
-- "For Input": one short intro (e.g. "Team seeks input on:") then guidance-seeking bullets.
-- "For Awareness": one short intro (e.g. "Team is sharing for awareness:") then awareness bullets.
-- Use professional governance vocabulary: approve, endorse, input, considerations, awareness, milestone, plans, stage gate, resource, budget, study.
-- Do not invent facts, numbers, or dates. No markdown. No explanation.
-- Output ONLY valid JSON with this exact structure (each array at least 5 items; use "" for placeholders):
-{"for_decision_intro":"...","for_decision":["...",...],"for_input_intro":"...","for_input":["...",...],"for_awareness_intro":"...","for_awareness":["...",...]}`
+- Use ONLY the data provided. Do not invent facts, numbers, or dates.
+- Tone: formal, crisp, leadership-ready.
+- Output valid JSON only (no markdown, no explanation).
+- Structure: for_decision_intro, for_decision (exactly 2 bullets), for_input_intro, for_input (exactly 2 bullets), for_awareness_intro, for_awareness (exactly 2 bullets).
+- For Decision: board-facing approval/endorsement (e.g. "Does the Board endorse:" then 2 points).
+- For Input: guidance-seeking (e.g. "Team seeks input on:" then 2 points).
+- For Awareness: informational (e.g. "Team is sharing for awareness:" then 2 points).
 
-const SUMMARY_SYSTEM = `You are a pharma governance communications specialist supporting governance review meetings.
+Output ONLY this JSON (2 items per array):
+{"for_decision_intro":"...","for_decision":["...","..."],"for_input_intro":"...","for_input":["...","..."],"for_awareness_intro":"...","for_awareness":["...","..."]}`
 
-Your task is to write a polished executive summary for the "Generated analysis" section of a governance slide.
+const SUMMARY_SYSTEM = `You are a pharma governance communications specialist for the "Generated analysis" section.
 
-Requirements:
-- Use only the information provided. Formal pharma governance language suitable for VIDRU Board, DRB, or PIB.
-- Focus on current timeline, key milestones, and financial context (EPE/IPE) if present.
-- Mention timing, phase progression, critical activities, dependencies, and financial takeaways where relevant.
-- Output: plain text only. No headings, markdown, or JSON.
-- Return 3 to 5 short executive bullet points, one point per line. Each point concise and slide-ready. Do not return a single paragraph.`
+Task: Write a short executive summary based ONLY on the provided: project metadata, selected timeline data, and cost/FTE (financial) analysis.
+
+Rules:
+- Use ONLY the information provided. Do not invent data.
+- Write exactly 3 short paragraphs. Each paragraph 2–4 sentences.
+- Paragraph 1: project and current status (phase, key milestones from selected timeline).
+- Paragraph 2: timeline and dependencies (critical activities, timing).
+- Paragraph 3: cost/FTE and financial takeaways where data is provided.
+- Formal governance language (VIDRU Board, DRB, PIB). No headings, no bullet lists, no JSON.`
 
 export async function generateConsultationRationale(projectKey, getGovernanceData) {
   let data
@@ -55,8 +77,9 @@ export async function generateConsultationRationale(projectKey, getGovernanceDat
   } catch {
     return getDefaultConsultation()
   }
+
   const context = buildContextFromGovernance(data)
-  const userPrompt = `Generate three sections of consultation points for "Why does the Team consult the Board?" using only the data below. Output valid JSON with for_decision_intro, for_decision, for_input_intro, for_input, for_awareness_intro, for_awareness (each array at least 5 items; use "" for placeholders).\n\nData: ${context || 'No project data.'}`
+  const userPrompt = `Generate the three consultation sections using only the data below. Output valid JSON with for_decision_intro, for_decision (2 items), for_input_intro, for_input (2 items), for_awareness_intro, for_awareness (2 items).\n\nData:\n${context || 'No project data.'}`
 
   try {
     const raw = await chatCompletion([
@@ -65,19 +88,19 @@ export async function generateConsultationRationale(projectKey, getGovernanceDat
     ])
     const jsonStr = raw.replace(/```json?\s*/i, '').replace(/```\s*$/, '').trim()
     const parsed = JSON.parse(jsonStr)
-    const pad = (arr) => {
-      const a = Array.isArray(arr) ? arr.map((s) => String(s ?? '').trim()) : []
-      while (a.length < 5) a.push('')
-      return a.slice(0, 10)
+    const toTwo = (arr) => {
+      const a = Array.isArray(arr) ? arr.map((s) => String(s ?? '').trim()).filter(Boolean) : []
+      return [a[0] || '', a[1] || '']
     }
+    const padToFive = (two) => [...two, '', '', ''].slice(0, 5)
     const def = getDefaultConsultation()
     return {
       forDecisionIntro: typeof parsed.for_decision_intro === 'string' ? parsed.for_decision_intro.trim() : def.forDecisionIntro,
-      forDecision: pad(parsed.for_decision ?? parsed.forDecision),
+      forDecision: padToFive(toTwo(parsed.for_decision ?? parsed.forDecision)),
       forInputIntro: typeof parsed.for_input_intro === 'string' ? parsed.for_input_intro.trim() : def.forInputIntro,
-      forInput: pad(parsed.for_input ?? parsed.forInput),
+      forInput: padToFive(toTwo(parsed.for_input ?? parsed.forInput)),
       forAwarenessIntro: typeof parsed.for_awareness_intro === 'string' ? parsed.for_awareness_intro.trim() : def.forAwarenessIntro,
-      forAwareness: pad(parsed.for_awareness ?? parsed.forAwareness),
+      forAwareness: padToFive(toTwo(parsed.for_awareness ?? parsed.forAwareness)),
     }
   } catch {
     return getDefaultConsultation()
@@ -91,18 +114,17 @@ const DEFAULT_INTROS = {
 }
 
 function getDefaultConsultation() {
-  const five = (first, rest) => [first, ...rest, '', ''].slice(0, 5)
+  const two = (a, b) => [a, b, '', '', ''].slice(0, 5)
   return {
     forDecisionIntro: DEFAULT_INTROS.forDecisionIntro,
-    forDecision: five('The proposed scenario and associated timelines.', ['Include level of confidence.']),
+    forDecision: two('The proposed scenario and associated timelines.', 'Level of confidence and resource ask.'),
     forInputIntro: DEFAULT_INTROS.forInputIntro,
-    forInput: five('Key dependencies and risks.', ['Any additional considerations before next stage gate.']),
+    forInput: two('Key dependencies and risks.', 'Additional considerations before next stage gate.'),
     forAwarenessIntro: DEFAULT_INTROS.forAwarenessIntro,
-    forAwareness: five('Current status and next milestones.', ['Governance boards for this stage gate.']),
+    forAwareness: two('Current status and next milestones.', 'Governance boards for this stage gate.'),
   }
 }
 
-// Akash-style: structured input (project, timeline_tasks, financials) for summary (see docs/AKASH-LLM-LOGIC.md)
 function buildStructuredSummaryInput(data, visibleTimelineSummary = '') {
   const out = { project_name: '', project_id: '', timeline_title: '', timeline_tasks: [], financial_year_headers: [], financial_rows: [] }
   if (!data) return out
@@ -139,13 +161,11 @@ export async function generateSummary(projectKey, getGovernanceData, visibleTime
   } catch {
     return 'Summary could not be generated. Load project data and try again.'
   }
+
   const structured = buildStructuredSummaryInput(data, visibleTimelineSummary)
-  const context = buildContextFromGovernance(data)
-  const timelineSection = visibleTimelineSummary && visibleTimelineSummary.trim()
-    ? `\n\nTimeline the user has selected (use as the basis for your summary):\n${visibleTimelineSummary.trim()}`
-    : ''
+  const context = buildContextFromGovernance(data, visibleTimelineSummary)
   const inputDataJson = JSON.stringify(structured, null, 2)
-  const userPrompt = `Write a polished executive summary (3–5 bullet points, one per line, plain text only) for the governance slide. Use only the information in the input data below.\n\nInput data:\n${inputDataJson}\n${timelineSection ? `\nAdditional timeline context:\n${timelineSection}` : ''}`
+  const userPrompt = `Write exactly 3 short paragraphs for the governance slide summary. Use only the information below. Paragraph 1: project and status. Paragraph 2: timeline and dependencies. Paragraph 3: cost/FTE and financial takeaways.\n\nData:\n${context || inputDataJson}`
 
   try {
     const text = await chatCompletion([
@@ -156,7 +176,7 @@ export async function generateSummary(projectKey, getGovernanceData, visibleTime
   } catch (err) {
     const msg = err?.message || String(err)
     if (msg.includes('not configured') || msg.includes('AZURE_OPENAI')) {
-      return 'Summary could not be generated. Ensure Azure OpenAI is configured.'
+      return 'Summary could not be generated. Ensure AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY are set in .env and restart the server.'
     }
     return `Summary could not be generated. Azure OpenAI error: ${msg}`
   }
