@@ -117,13 +117,7 @@ Your task is to write a polished executive summary for the "Generated analysis" 
 Requirements:
 - Use only the information provided in the input data
 - Write in formal pharma governance language suitable for VIDRU Board, DRB, or PIB review
-- Use the summary_type field to shape the output focus:
-  - Executive: provide an overall update with balanced timeline and status coverage
-  - Timeline Updates: focus on project schedule, milestone timing, sequencing, and critical path updates
-  - Finance & Resources: focus on budget and resource updates using IPE, EPE, and FTE data when present
-  - Decision oriented: frame the summary to support governance decision making, highlighting decisions, dependencies, and implications
-- Apply custom_instruction only if it is provided and non-empty
-- Focus on the current timeline, key milestones or inflection points, and cumulative EPE/IPE/FTE context
+- Focus on the current timeline, key milestones or inflection points, and cumulative EPE/IPE context
 - Mention the most relevant timing, phase progression, critical activities, dependencies, and financial takeaways if present
 - Keep the output concise and presentation-ready
 - Do not invent facts, dates, numbers, risks, or decisions

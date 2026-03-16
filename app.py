@@ -63,8 +63,6 @@ class GenerateSummaryRequest(BaseModel):
 
     project_name: str = Field(default="", max_length=500)
     project_id: str = Field(default="", max_length=200)
-    summary_type: str = Field(default="Executive", max_length=100)
-    custom_instruction: str = Field(default="", max_length=4000)
     timeline_title: str = Field(default="", max_length=500)
     timeline_tasks: list[TimelineTaskInput] = Field(default_factory=list)
     financial_year_headers: list[str] = Field(default_factory=list)

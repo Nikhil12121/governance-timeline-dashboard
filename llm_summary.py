@@ -55,8 +55,6 @@ def generate_governance_summary(payload: dict[str, Any]) -> str:
         {
             "project_name": _normalize_text(payload.get("project_name", "")),
             "project_id": _normalize_text(payload.get("project_id", "")),
-            "summary_type": _normalize_text(payload.get("summary_type", "")) or "Executive",
-            "custom_instruction": str(payload.get("custom_instruction", "") or "").strip(),
             "timeline_title": _normalize_text(payload.get("timeline_title", "")),
             "timeline_tasks": _normalize_timeline_tasks(payload.get("timeline_tasks")),
             "financial_year_headers": [
