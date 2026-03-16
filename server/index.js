@@ -1,4 +1,11 @@
-import 'dotenv/config'
+import path from 'path'
+import { fileURLToPath } from 'url'
+import dotenv from 'dotenv'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const projectRoot = path.resolve(__dirname, '..')
+dotenv.config({ path: path.join(projectRoot, '.env') })
+
 import cors from 'cors'
 import express from 'express'
 import { createGovernanceRepository } from './repositories/index.js'
@@ -80,4 +87,6 @@ app.post('/api/analyze/summary', async (req, res) => {
 
 app.listen(port, () => {
   console.log(`Governance API running on http://localhost:${port} (${mode} mode)`)
+  const hasAzure = !!(process.env.AZURE_OPENAI_ENDPOINT && process.env.AZURE_OPENAI_API_KEY)
+  console.log(`Azure OpenAI: ${hasAzure ? 'configured (' + (process.env.AZURE_OPENAI_DEPLOYMENT || 'gpt-5.2') + ')' : 'not configured (set .env)'}`)
 })
