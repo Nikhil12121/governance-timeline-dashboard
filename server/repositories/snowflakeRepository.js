@@ -93,6 +93,7 @@ function mapForecastRow(row) {
 
 function mapTimelineRow(row) {
   const normalized = normalizeRecord(row)
+  const phase = firstValue(normalized, ['Phase', 'PHASE', 'phase', 'Task Category', 'TASK CATEGORY'])
   return {
     id: String(firstValue(normalized, ['Task ID', 'TASK ID', 'id']) ?? ''),
     name: String(firstValue(normalized, ['Task Name', 'TASK NAME', 'name']) ?? ''),
@@ -101,7 +102,7 @@ function mapTimelineRow(row) {
     progress: Number(firstValue(normalized, ['Progress', 'PROGRESS']) ?? 0),
     type: String(firstValue(normalized, ['Task Type', 'TASK TYPE', 'type']) ?? 'task'),
     project: firstValue(normalized, ['Parent Task ID', 'PARENT TASK ID', 'project']),
-    phase: firstValue(normalized, ['Phase', 'PHASE', 'phase']),
+    phase: phase != null ? String(phase) : undefined,
     manualContext: firstValue(normalized, ['Context', 'CONTEXT', 'manualContext']),
   }
 }
@@ -124,11 +125,17 @@ function mapMilestoneTimelineRow(row) {
   const reportedDate = firstValue(normalized, ['Reported Date', 'REPORTED DATE'])
   const minDate = firstValue(normalized, ['Min Task Reported Date', 'MIN TASK REPORTED DATE'])
   const maxDate = firstValue(normalized, ['Max Task Reported Date', 'MAX TASK REPORTED DATE'])
-  const itemType = String(firstValue(normalized, ['Item Type', 'ITEM TYPE']) ?? '')
+  const type = String(firstValue(normalized, ['Type', 'TYPE']) ?? '')
+  const itemTypeRaw = firstValue(normalized, ['Item Type', 'ITEM TYPE'])
+  const itemType = String(itemTypeRaw ?? '')
   const milestoneCategory = String(firstValue(normalized, ['Milestone Category', 'MILESTONE CATEGORY']) ?? 'Other')
   const planCategory = String(firstValue(normalized, ['Plan Category', 'PLAN CATEGORY']) ?? 'Current')
   const assetProgram = firstValue(normalized, ['Asset/Program', 'ASSET/PROGRAM'])
   const formatDate = (d) => (d == null ? '' : typeof d === 'string' ? d.slice(0, 10) : new Date(d).toISOString().slice(0, 10))
+  // Study rows: Item Type can be NULL when Plan Category is NULL; ensure we get "Study - Current" so UI can plot study milestones below Current plan
+  const resolvedItemType = itemType && itemType.trim()
+    ? itemType
+    : (type.toLowerCase() === 'study' ? `Study - ${planCategory || 'Current'}` : 'Project - Current')
   return {
     projectKey,
     itemTaskCode: taskCode,
@@ -137,7 +144,7 @@ function mapMilestoneTimelineRow(row) {
     reportedDate: formatDate(reportedDate),
     minTaskReportedDate: formatDate(minDate),
     maxTaskReportedDate: formatDate(maxDate),
-    itemType: itemType || 'Project - Current',
+    itemType: resolvedItemType,
     milestoneCategory: milestoneCategory || 'Other',
     planCategory,
     assetProgram: assetProgram != null ? String(assetProgram) : undefined,

@@ -1,5 +1,6 @@
 import type { TimelineTask } from '@/types/timeline'
 import type { MilestoneTimelineRow } from '@/types/milestoneTimeline'
+import { parseDateLocal, formatDateLocal } from '@/utils/dateUtils'
 
 /**
  * Derive Power BI–style milestone timeline rows from existing timeline tasks.
@@ -17,10 +18,10 @@ export function timelineTasksToMilestoneRows(
   const parent = assetName != null && assetName !== '' ? `${assetName} - Current` : `${projectKey} - Current`
   const projectLabel = projectName != null && projectName !== '' ? `${projectName} - Current` : `${projectKey} - Current`
   return tasks.map((t) => {
-    const start = t.start instanceof Date ? t.start : new Date(t.start)
-    const end = t.end instanceof Date ? t.end : new Date(t.end)
-    const startStr = start.toISOString().slice(0, 10)
-    const endStr = end.toISOString().slice(0, 10)
+    const start = t.start instanceof Date ? t.start : parseDateLocal(t.start)
+    const end = t.end instanceof Date ? t.end : parseDateLocal(t.end)
+    const startStr = formatDateLocal(start)
+    const endStr = formatDateLocal(end)
     const phase = t.phase && t.phase.trim() ? t.phase : 'Milestones'
     const name = t.name || t.id
     return {

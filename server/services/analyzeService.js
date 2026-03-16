@@ -58,32 +58,50 @@ Rules:
 Output ONLY this JSON (2 items per array):
 {"for_decision_intro":"...","for_decision":["...","..."],"for_input_intro":"...","for_input":["...","..."],"for_awareness_intro":"...","for_awareness":["...","..."]}`
 
+/** Converts a short user paragraph (2–3 lines) into governance-ready bullet points. Keeps output specific and concise. */
+const CONSULTATION_FROM_PARAGRAPH_SYSTEM = `You are a pharma governance communications specialist for VIDRU Board/DRB/PIB.
+
+Task: Convert the user's short paragraph (2–3 sentences) into governance-ready points for "Why does the Team consult the Board?" in three sections: For Decision, For Input, For Awareness.
+
+Rules:
+- Use ONLY what the user wrote (and optional project context). Do not add unrelated content.
+- Output SPECIFIC, concise bullet points—not long prose. Each section: exactly 2 bullets (or 1 if the paragraph only implies one). Examples of specific points: "The resource & budget for Ph2a study, DDI CYP3A4 midazolam study and VEO activities"; "C2Ph2A milestone"; "Medicine Profile"; "Governance boards for this stage gate: ID Board, GSB and access review board".
+- For Decision: items requiring board endorsement/approval (optional intro e.g. "Does the GHIB endorse:").
+- For Input: items where the team seeks guidance (optional intro e.g. "Any additional considerations for...").
+- For Awareness: informational items the team is sharing (optional intro e.g. "Team is sharing for awareness:").
+- Tone: formal, leadership-ready. Output valid JSON only (no markdown, no explanation).
+
+Output ONLY this JSON (2 items per array; use "" for unused slots):
+{"for_decision_intro":"...","for_decision":["...","..."],"for_input_intro":"...","for_input":["...","..."],"for_awareness_intro":"...","for_awareness":["...","..."]}`
+
 const SUMMARY_SYSTEM = `You are a pharma governance communications specialist for the "Generated analysis" section.
 
-Task: Write a short executive summary based ONLY on the provided: project metadata, selected timeline data, and cost/FTE (financial) analysis.
+Task: Write a short summary based ONLY on the provided: project metadata, selected timeline data, and cost/FTE (financial) analysis. The summary type and any custom instruction tell you what to emphasise.
 
 Rules:
 - Use ONLY the information provided. Do not invent data.
 - Write exactly 3 short paragraphs. Each paragraph 2–4 sentences.
-- Paragraph 1: project and current status (phase, key milestones from selected timeline).
-- Paragraph 2: timeline and dependencies (critical activities, timing).
-- Paragraph 3: cost/FTE and financial takeaways where data is provided.
 - Formal governance language (VIDRU Board, DRB, PIB). No headings, no bullet lists, no JSON.`
 
-export async function generateConsultationRationale(projectKey, getGovernanceData) {
+export async function generateConsultationRationale(projectKey, getGovernanceData, userParagraph) {
   let data
   try {
     data = await getGovernanceData(projectKey)
   } catch {
-    return getDefaultConsultation()
+    if (!userParagraph || !userParagraph.trim()) return getDefaultConsultation()
+    data = null
   }
 
-  const context = buildContextFromGovernance(data)
-  const userPrompt = `Generate the three consultation sections using only the data below. Output valid JSON with for_decision_intro, for_decision (2 items), for_input_intro, for_input (2 items), for_awareness_intro, for_awareness (2 items).\n\nData:\n${context || 'No project data.'}`
+  const context = data ? buildContextFromGovernance(data) : ''
+  const useParagraphPrompt = userParagraph && String(userParagraph).trim().length > 0
+
+  const userPrompt = useParagraphPrompt
+    ? `Convert this paragraph into governance-ready points (For Decision, For Input, For Awareness). Output valid JSON with for_decision_intro, for_decision (2 items), for_input_intro, for_input (2 items), for_awareness_intro, for_awareness (2 items). Keep each bullet specific and concise.\n\nUser's paragraph:\n${userParagraph.trim()}\n\n${context ? `Optional project context (use only to ground the points, not to add new content):\n${context}` : ''}`
+    : `Generate the three consultation sections using only the data below. Output valid JSON with for_decision_intro, for_decision (2 items), for_input_intro, for_input (2 items), for_awareness_intro, for_awareness (2 items).\n\nData:\n${context || 'No project data.'}`
 
   try {
     const raw = await chatCompletion([
-      { role: 'system', content: CONSULTATION_SYSTEM },
+      { role: 'system', content: useParagraphPrompt ? CONSULTATION_FROM_PARAGRAPH_SYSTEM : CONSULTATION_SYSTEM },
       { role: 'user', content: userPrompt },
     ])
     const jsonStr = raw.replace(/```json?\s*/i, '').replace(/```\s*$/, '').trim()
@@ -154,7 +172,14 @@ function buildStructuredSummaryInput(data, visibleTimelineSummary = '') {
   return out
 }
 
-export async function generateSummary(projectKey, getGovernanceData, visibleTimelineSummary = '') {
+const SUMMARY_TYPE_FOCUS = {
+  'Executive': 'Paragraph 1: overall project and current status (phase, key milestones). Paragraph 2: timeline and dependencies. Paragraph 3: cost/FTE and financial takeaways. Give an overall executive update.',
+  'Timeline Update': 'Focus on project schedule: Paragraph 1: project and phase. Paragraph 2: timeline, critical activities, and schedule (dates, milestones). Paragraph 3: how timeline ties to cost/delivery if data is provided.',
+  'Finance & Resources': 'Focus on budget and resources: Paragraph 1: project context. Paragraph 2: timeline only briefly. Paragraph 3: budget using IPE, EPE, FTE and financial data from the information below.',
+  'Decision oriented': 'Focus on what the Board needs to decide: Paragraph 1: project status and key milestones. Paragraph 2: timeline and dependencies. Paragraph 3: financial and resource implications to support decision-making.',
+}
+
+export async function generateSummary(projectKey, getGovernanceData, visibleTimelineSummary = '', summaryType = '', customInstruction = '') {
   let data
   try {
     data = await getGovernanceData(projectKey)
@@ -165,7 +190,11 @@ export async function generateSummary(projectKey, getGovernanceData, visibleTime
   const structured = buildStructuredSummaryInput(data, visibleTimelineSummary)
   const context = buildContextFromGovernance(data, visibleTimelineSummary)
   const inputDataJson = JSON.stringify(structured, null, 2)
-  const userPrompt = `Write exactly 3 short paragraphs for the governance slide summary. Use only the information below. Paragraph 1: project and status. Paragraph 2: timeline and dependencies. Paragraph 3: cost/FTE and financial takeaways.\n\nData:\n${context || inputDataJson}`
+  const focus = SUMMARY_TYPE_FOCUS[summaryType] || SUMMARY_TYPE_FOCUS['Executive']
+  let userPrompt = `Write exactly 3 short paragraphs for the governance slide summary. Use only the information below.\n\nSummary type: ${summaryType || 'Executive'}. ${focus}\n\nData:\n${context || inputDataJson}`
+  if (customInstruction && customInstruction.trim()) {
+    userPrompt += `\n\nAdditional instruction (follow this): ${customInstruction.trim()}`
+  }
 
   try {
     const text = await chatCompletion([

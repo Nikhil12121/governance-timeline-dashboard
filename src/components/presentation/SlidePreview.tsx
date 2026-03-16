@@ -8,6 +8,7 @@ import { GanttChart } from '@/components/timeline/GanttChart'
 import { GanttChartTemplate2 } from '@/components/timeline/GanttChartTemplate2'
 import { GanttChartTemplate3 } from '@/components/timeline/GanttChartTemplate3'
 import { MilestoneGovernanceView } from '@/components/timeline/MilestoneGovernanceView'
+import { parseDateLocal } from '@/utils/dateUtils'
 
 const GSK = {
   titleColor: '#1a1a1a',
@@ -86,6 +87,7 @@ export function SlidePreviewCard({
   phaseColumnWidth,
   listCellWidth,
   milestoneTimelineRows,
+  dateRange,
 }: {
   slide: Slide
   pageNum: number
@@ -102,6 +104,8 @@ export function SlidePreviewCard({
   listCellWidth?: number
   /** For template 1: Milestone & Governance rows (same as Timeline & data tab); when set, preview shows MilestoneGovernanceView */
   milestoneTimelineRows?: MilestoneTimelineRow[]
+  /** When set, milestone view axis is clamped to this range (same as Timeline & analysis). */
+  dateRange?: { start: Date; end: Date } | null
 }) {
   const effectiveViewMode = viewMode ?? 'Month'
   const hasChartData = templateId === 1
@@ -200,6 +204,7 @@ export function SlidePreviewCard({
                   rows={milestoneTimelineRows}
                   assetName={assetNameLabel}
                   viewMode={effectiveViewMode}
+                  dateRange={dateRange ?? undefined}
                 />
               </div>
             ) : ganttTasks && ganttTasks.length > 0 && effectiveViewMode ? (
@@ -232,8 +237,8 @@ export function SlidePreviewCard({
                       <tr><td colSpan={6} className="py-4 px-2 text-slate-500">No data. Adjust timeline filters above.</td></tr>
                     ) : (
                       timelineTasks.map((t) => {
-                        const startD = t.start instanceof Date ? t.start : new Date(t.start as string | number)
-                        const endD = t.end instanceof Date ? t.end : new Date(t.end as string | number)
+                        const startD = t.start instanceof Date ? t.start : parseDateLocal(t.start as string | number)
+                        const endD = t.end instanceof Date ? t.end : parseDateLocal(t.end as string | number)
                         return (
                           <tr key={t.id} className="border-b border-slate-100">
                             <td className="py-1.5 px-2">{t.name}</td>
@@ -290,7 +295,7 @@ export function SlidePreviewCard({
             </div>
           ) : templateId === 1 && milestoneTimelineRows && milestoneTimelineRows.length > 0 ? (
             <div className="mt-2 flex-1 min-h-[220px] rounded-lg border border-slate-200 overflow-x-auto overflow-y-hidden bg-white">
-              <MilestoneGovernanceView rows={milestoneTimelineRows} assetName={assetNameLabel} viewMode={effectiveViewMode} />
+              <MilestoneGovernanceView rows={milestoneTimelineRows} assetName={assetNameLabel} viewMode={effectiveViewMode} dateRange={dateRange ?? undefined} />
             </div>
           ) : ganttTasks && ganttTasks.length > 0 && effectiveViewMode ? (
             <div className="mt-2 flex-1 min-h-[220px] rounded-lg border border-slate-200 overflow-x-auto overflow-y-hidden bg-white">

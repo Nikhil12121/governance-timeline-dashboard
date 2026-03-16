@@ -58,6 +58,8 @@ export interface ConsultationObjectivesSlide {
   type: 'consultation-objectives'
   id: string
   title: string
+  /** User's short paragraph (2–3 lines); AI converts this into governance-ready bullet points. */
+  userParagraph?: string
   forDecisionIntro?: string
   forDecision: string[]
   forInputIntro?: string

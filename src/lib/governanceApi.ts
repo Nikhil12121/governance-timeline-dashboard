@@ -1,5 +1,6 @@
 import type { AssetOption, GovernanceProjectData, TimelineTaskDto } from '@/types/governanceApi'
 import type { TimelineTask } from '@/types/timeline'
+import { parseDateLocal } from '@/utils/dateUtils'
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ?? 'http://localhost:8787/api'
 
@@ -28,8 +29,8 @@ async function postJson<T>(path: string, body: object): Promise<T> {
 function toTimelineTask(task: TimelineTaskDto): TimelineTask {
   return {
     ...task,
-    start: new Date(task.start),
-    end: new Date(task.end),
+    start: parseDateLocal(task.start),
+    end: parseDateLocal(task.end),
   }
 }
 
@@ -56,18 +57,29 @@ export interface ConsultationAnalysis {
   forAwareness: string[]
 }
 
-export async function fetchConsultationAnalysis(projectKey: string): Promise<ConsultationAnalysis> {
-  return postJson<ConsultationAnalysis>('/analyze/consultation', { projectKey })
+export async function fetchConsultationAnalysis(
+  projectKey: string,
+  /** Optional: user's 2–3 line paragraph; AI converts to governance-ready points (For Decision / Input / Awareness). */
+  userParagraph?: string
+): Promise<ConsultationAnalysis> {
+  return postJson<ConsultationAnalysis>('/analyze/consultation', {
+    projectKey,
+    ...(userParagraph != null && userParagraph.trim() !== '' ? { userParagraph: userParagraph.trim() } : {}),
+  })
 }
 
 export async function fetchSummaryAnalysis(
   projectKey: string,
-  visibleTimelineSummary?: string
+  visibleTimelineSummary?: string,
+  summaryType?: string,
+  customInstruction?: string
 ): Promise<{ body: string }> {
   return postJson<{ body: string }>('/analyze/summary', {
     projectKey,
     ...(visibleTimelineSummary != null && visibleTimelineSummary !== ''
       ? { visibleTimelineSummary }
       : {}),
+    ...(summaryType != null && summaryType.trim() !== '' ? { summaryType: summaryType.trim() } : {}),
+    ...(customInstruction != null && customInstruction.trim() !== '' ? { customInstruction: customInstruction.trim() } : {}),
   })
 }

@@ -17,6 +17,7 @@ import { GSK_THEME } from '@/theme/gsk'
 import type { AssetOption } from '@/types/governanceApi'
 import { mergeGovernanceDataIntoPresentation } from '@/utils/governanceData'
 import { timelineTasksToMilestoneRows } from '@/utils/milestoneTimelineData'
+import { parseDateLocal } from '@/utils/dateUtils'
 
 const GSK_ORANGE = GSK_THEME.accentColor
 
@@ -67,6 +68,8 @@ export function GovernancePPTPage({ templateId = 1 }: GovernancePPTPageProps) {
   const [consultationAiError, setConsultationAiError] = useState<string | null>(null)
   const [loadingSummaryAi, setLoadingSummaryAi] = useState(false)
   const [summaryAiError, setSummaryAiError] = useState<string | null>(null)
+  const [summaryType, setSummaryType] = useState<string>('Finance & Resources')
+  const [customInstruction, setCustomInstruction] = useState<string>('')
   const resizeStartRef = useRef<{ x: number; width: number; kind: 'phase' | 'name' } | null>(null)
 
   const GANTT_ZOOM_MIN = 32
@@ -109,7 +112,7 @@ export function GovernancePPTPage({ templateId = 1 }: GovernancePPTPageProps) {
     if (milestoneTimelineRowsFromApi.length > 0) {
       if (dateRange?.start && dateRange?.end) {
         return milestoneTimelineRowsFromApi.filter((r) => {
-          const d = new Date(r.reportedDate).getTime()
+          const d = parseDateLocal(r.reportedDate).getTime()
           return d >= dateRange.start.getTime() && d <= dateRange.end.getTime()
         })
       }
@@ -177,11 +180,13 @@ export function GovernancePPTPage({ templateId = 1 }: GovernancePPTPageProps) {
   }, [presentation, selectedProjectKey, setPresentation, setTasks])
 
   const handleGenerateConsultationAi = useCallback(async () => {
-    if (!selectedProjectKey || !consultationSlide) return
+    if (!consultationSlide) return
+    const userParagraph = consultationSlide.type === 'consultation-objectives' ? (consultationSlide as import('@/types/presentation').ConsultationObjectivesSlide).userParagraph : undefined
+    if (!(userParagraph && userParagraph.trim()) && !selectedProjectKey) return
     setLoadingConsultationAi(true)
     setConsultationAiError(null)
     try {
-      const result = await fetchConsultationAnalysis(selectedProjectKey)
+      const result = await fetchConsultationAnalysis(selectedProjectKey || '', userParagraph)
       const pad = (arr: string[]) => {
         const a = [...arr]
         while (a.length < 5) a.push('')
@@ -208,7 +213,7 @@ export function GovernancePPTPage({ templateId = 1 }: GovernancePPTPageProps) {
       setLoadingSummaryAi(true)
       try {
         const visibleSummary = generateTimelineSummary(filteredTasks)
-        const { body } = await fetchSummaryAnalysis(selectedProjectKey, visibleSummary)
+        const { body } = await fetchSummaryAnalysis(selectedProjectKey, visibleSummary, summaryType, customInstruction)
         const isErrorResponse =
           typeof body === 'string' &&
           (body.startsWith('Summary could not be generated') || body.includes('Ensure Azure OpenAI is configured'))
@@ -238,7 +243,7 @@ export function GovernancePPTPage({ templateId = 1 }: GovernancePPTPageProps) {
         updateSlide(contentSlide.id, { bullets })
       }
     }
-  }, [selectedProjectKey, filteredTasks, summarySlide, contentSlide, updateSlide])
+  }, [selectedProjectKey, filteredTasks, summarySlide, contentSlide, updateSlide, summaryType, customInstruction])
 
   const handleDoubleClickTask = (task: { id: string }) => {
     const full = tasks.find((t) => t.id === task.id) ?? null
@@ -532,21 +537,35 @@ export function GovernancePPTPage({ templateId = 1 }: GovernancePPTPageProps) {
               </div>
               {consultationPanelOpen && (
               <div className="px-6 pb-6">
-              <div className="flex flex-wrap items-center gap-3 mb-4">
+              <label className="block mb-3">
+                <span className="text-sm font-medium text-slate-700">Written paragraph</span>
+                <p className="mt-0.5 text-xs text-slate-500 mb-1">
+                  Assess the paragraph below (or replace with your own). Then click <strong>Generate with AI</strong> to get governance PPT–ready points in the format: For Decision, For Input, For Awareness.
+                </p>
+                <textarea
+                  value={consultationSlide.type === 'consultation-objectives' ? (consultationSlide.userParagraph ?? '') : ''}
+                  onChange={(e) => consultationSlide.type === 'consultation-objectives' && updateSlide(consultationSlide.id, { userParagraph: e.target.value })}
+                  className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm min-h-[100px]"
+                  placeholder="Paste or type your paragraph here (e.g. what needs endorsement, what you seek input on, what you are sharing for awareness)."
+                  rows={4}
+                />
+              </label>
+              <div className="flex flex-wrap items-center gap-3 mb-6">
                 <button
                   type="button"
                   onClick={handleGenerateConsultationAi}
-                  disabled={loadingConsultationAi || !selectedProjectKey}
+                  disabled={loadingConsultationAi || !(selectedProjectKey || (consultationSlide.type === 'consultation-objectives' && (consultationSlide.userParagraph ?? '').trim()))}
                   className="px-4 py-2 rounded-lg text-sm font-medium text-white shadow-sm hover:opacity-95 disabled:opacity-50"
                   style={{ backgroundColor: GSK_ORANGE }}
                 >
                   {loadingConsultationAi ? 'Generating…' : 'Generate with AI'}
                 </button>
                 {consultationAiError && <span className="text-sm text-red-600">{consultationAiError}</span>}
+                <span className="text-xs text-slate-500">Select a project for context, or use paragraph only.</span>
               </div>
-              <p className="text-sm text-slate-600 mb-4">Minimum 5 lines per section. You can add blank lines and free-form text; line breaks are preserved.</p>
+              <p className="text-sm font-medium text-slate-700 mb-3">Governance-ready points (from AI – edit if needed)</p>
               <label className="block mb-4">
-                <span className="text-sm font-medium text-slate-700">For Decision (min 5 points)</span>
+                <span className="text-sm font-medium text-slate-700">For Decision</span>
                 {consultationSlide.forDecisionIntro && (
                   <p className="mt-1 text-xs text-slate-600 italic">{consultationSlide.forDecisionIntro}</p>
                 )}
@@ -557,13 +576,13 @@ export function GovernancePPTPage({ templateId = 1 }: GovernancePPTPageProps) {
                     while (lines.length < 5) lines.push('')
                     updateSlide(consultationSlide.id, { forDecision: lines })
                   }}
-                  className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm min-h-[140px]"
-                  placeholder="One point per line; add at least 5 lines"
-                  rows={7}
+                  className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm min-h-[100px]"
+                  placeholder="One point per line"
+                  rows={5}
                 />
               </label>
               <label className="block mb-4">
-                <span className="text-sm font-medium text-slate-700">For Input (min 5 points)</span>
+                <span className="text-sm font-medium text-slate-700">For Input</span>
                 {consultationSlide.forInputIntro && (
                   <p className="mt-1 text-xs text-slate-600 italic">{consultationSlide.forInputIntro}</p>
                 )}
@@ -574,13 +593,13 @@ export function GovernancePPTPage({ templateId = 1 }: GovernancePPTPageProps) {
                     while (lines.length < 5) lines.push('')
                     updateSlide(consultationSlide.id, { forInput: lines })
                   }}
-                  className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm min-h-[140px]"
-                  placeholder="One point per line; add at least 5 lines"
-                  rows={7}
+                  className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm min-h-[100px]"
+                  placeholder="One point per line"
+                  rows={5}
                 />
               </label>
               <label className="block">
-                <span className="text-sm font-medium text-slate-700">For Awareness (min 5 points)</span>
+                <span className="text-sm font-medium text-slate-700">For Awareness</span>
                 {consultationSlide.forAwarenessIntro && (
                   <p className="mt-1 text-xs text-slate-600 italic">{consultationSlide.forAwarenessIntro}</p>
                 )}
@@ -591,9 +610,9 @@ export function GovernancePPTPage({ templateId = 1 }: GovernancePPTPageProps) {
                     while (lines.length < 5) lines.push('')
                     updateSlide(consultationSlide.id, { forAwareness: lines })
                   }}
-                  className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm min-h-[140px]"
-                  placeholder="One point per line; add at least 5 lines"
-                  rows={7}
+                  className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm min-h-[100px]"
+                  placeholder="One point per line"
+                  rows={5}
                 />
               </label>
               </div>
@@ -640,6 +659,7 @@ export function GovernancePPTPage({ templateId = 1 }: GovernancePPTPageProps) {
                   rows={effectiveMilestoneRows}
                   assetName={lastLoadedProjectLabel ?? undefined}
                   viewMode={viewMode}
+                  dateRange={dateRange}
                 />
               </div>
             )}
@@ -662,6 +682,31 @@ export function GovernancePPTPage({ templateId = 1 }: GovernancePPTPageProps) {
             <p className="text-sm text-slate-600 mb-4">
               Analysis is based on the timeline data above. Generate, then edit if required.
             </p>
+            <div className="flex flex-wrap items-end gap-4 mb-4">
+              <label className="block">
+                <span className="text-sm font-medium text-slate-700">Summary type</span>
+                <select
+                  value={summaryType}
+                  onChange={(e) => setSummaryType(e.target.value)}
+                  className="mt-1 block rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white min-w-[180px]"
+                >
+                  <option value="Executive">Executive</option>
+                  <option value="Timeline Update">Timeline Update</option>
+                  <option value="Finance & Resources">Finance & Resources</option>
+                  <option value="Decision oriented">Decision oriented</option>
+                </select>
+              </label>
+              <label className="block flex-1 min-w-[200px]">
+                <span className="text-sm font-medium text-slate-700">Custom instruction</span>
+                <input
+                  type="text"
+                  value={customInstruction}
+                  onChange={(e) => setCustomInstruction(e.target.value)}
+                  className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  placeholder="e.g. focus on risks"
+                />
+              </label>
+            </div>
             <div className="flex flex-wrap items-center gap-3 mb-4">
               <button
                 type="button"
@@ -764,6 +809,7 @@ export function GovernancePPTPage({ templateId = 1 }: GovernancePPTPageProps) {
                     phaseColumnWidth={phaseColumnWidth}
                     listCellWidth={listCellWidth}
                     milestoneTimelineRows={templateId === 1 && (slide.type === 'timeline' || slide.type === 'financials-gantt') ? effectiveMilestoneRows : undefined}
+                    dateRange={slide.type === 'timeline' || slide.type === 'financials-gantt' ? dateRange : undefined}
                   />
                 </div>
               ))}
@@ -808,6 +854,7 @@ export function GovernancePPTPage({ templateId = 1 }: GovernancePPTPageProps) {
                         rows={effectiveMilestoneRows}
                         assetName={lastLoadedProjectLabel ?? undefined}
                         viewMode={viewMode}
+                        dateRange={dateRange}
                       />
                     </div>
                   )}

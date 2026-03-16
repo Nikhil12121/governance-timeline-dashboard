@@ -1,11 +1,4 @@
-import path from 'path'
-import { fileURLToPath } from 'url'
-import dotenv from 'dotenv'
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const projectRoot = path.resolve(__dirname, '..')
-dotenv.config({ path: path.join(projectRoot, '.env') })
-
+import 'dotenv/config'
 import cors from 'cors'
 import express from 'express'
 import { createGovernanceRepository } from './repositories/index.js'
@@ -55,12 +48,14 @@ app.get('/api/projects/:projectKey/governance', async (req, res) => {
 
 app.post('/api/analyze/consultation', async (req, res) => {
   try {
-    const { projectKey } = req.body || {}
-    if (!projectKey || typeof projectKey !== 'string') {
-      res.status(400).json({ error: 'projectKey is required' })
+    const { projectKey, userParagraph } = req.body || {}
+    const hasParagraph = typeof userParagraph === 'string' && userParagraph.trim().length > 0
+    if (!hasParagraph && (!projectKey || typeof projectKey !== 'string')) {
+      res.status(400).json({ error: 'Provide a written paragraph and/or projectKey.' })
       return
     }
-    const result = await generateConsultationRationale(projectKey, (key) => repository.getGovernanceProjectData(key))
+    const key = projectKey && typeof projectKey === 'string' ? projectKey : ''
+    const result = await generateConsultationRationale(key, (k) => (k ? repository.getGovernanceProjectData(k) : Promise.reject(new Error('No project'))), hasParagraph ? userParagraph.trim() : undefined)
     res.json(result)
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : 'Consultation analysis failed.' })
@@ -69,7 +64,7 @@ app.post('/api/analyze/consultation', async (req, res) => {
 
 app.post('/api/analyze/summary', async (req, res) => {
   try {
-    const { projectKey, visibleTimelineSummary } = req.body || {}
+    const { projectKey, visibleTimelineSummary, summaryType, customInstruction } = req.body || {}
     if (!projectKey || typeof projectKey !== 'string') {
       res.status(400).json({ error: 'projectKey is required' })
       return
@@ -77,7 +72,9 @@ app.post('/api/analyze/summary', async (req, res) => {
     const body = await generateSummary(
       projectKey,
       (key) => repository.getGovernanceProjectData(key),
-      typeof visibleTimelineSummary === 'string' ? visibleTimelineSummary : ''
+      typeof visibleTimelineSummary === 'string' ? visibleTimelineSummary : '',
+      typeof summaryType === 'string' ? summaryType.trim() : '',
+      typeof customInstruction === 'string' ? customInstruction.trim() : ''
     )
     res.json({ body })
   } catch (error) {

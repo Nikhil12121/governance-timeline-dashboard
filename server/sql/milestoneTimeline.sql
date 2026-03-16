@@ -178,17 +178,17 @@ SELECT
   stm."Project Key",
   stm."Project Alternate ID",
   stm."Project Status",
-  stm."Task Code" || ' - ' || stm."Plan Category" AS "Task Code",
-  stm."Parent" || ' - ' || stm."Plan Category" AS "Parent",
+  stm."Task Code" || ' - ' || COALESCE(stm."Plan Category", 'Current') AS "Task Code",
+  stm."Parent" || ' - ' || COALESCE(stm."Plan Category", 'Current') AS "Parent",
   stm."Task Short Description",
   stm."Reported Date",
   stm."Reported Date Year",
-  stm."Project Active Substance Asset Reported Name" || ' - ' || stm."Plan Category" AS "Project Active Substance Asset Reported Name",
-  stm."Asset/Program" || ' - ' || stm."Plan Category" AS "Asset/Program",
+  stm."Project Active Substance Asset Reported Name" || ' - ' || COALESCE(stm."Plan Category", 'Current') AS "Project Active Substance Asset Reported Name",
+  stm."Asset/Program" || ' - ' || COALESCE(stm."Plan Category", 'Current') AS "Asset/Program",
   stm."Type",
-  stm."Type" || ' - ' || stm."Plan Category" AS "Item Type",
+  stm."Type" || ' - ' || COALESCE(stm."Plan Category", 'Current') AS "Item Type",
   stm."Milestone Category",
-  stm."Plan Category",
+  COALESCE(stm."Plan Category", 'Current') AS "Plan Category",
   stm_dates."Min Task Reported Date",
   stm_dates."Max Task Reported Date",
   CAST(CASE
@@ -199,5 +199,5 @@ SELECT
   NULL AS "First Submission Date",
   NULL AS "First Launch Date"
 FROM cte_study_milestone AS stm
-JOIN stm_dates ON stm."Task Code" = stm_dates."Task Code" AND stm."Plan Category" = stm_dates."Plan Category"
+JOIN stm_dates ON stm."Task Code" = stm_dates."Task Code" AND COALESCE(stm."Plan Category", 'Current') = COALESCE(stm_dates."Plan Category", 'Current')
 ORDER BY "Parent", "Task Code", "Reported Date";

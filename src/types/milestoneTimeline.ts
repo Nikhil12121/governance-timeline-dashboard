@@ -28,7 +28,7 @@ export interface MilestoneTimelineRow {
   /** Power BI: Milestone Date */
   reportedDate: string
   reportedDateYear?: number
-  /** Power BI: Legend: Item type */
+  /** Power BI: Legend: Item type. Drives swim lane (e.g. "Project - Approved Governance Baseline" vs "Project - Current"). */
   itemType: string
   /** Power BI: Milestone Legend */
   milestoneCategory: string
@@ -44,8 +44,12 @@ export interface MilestoneTimelineRow {
 
 /** One bar row: one (Parent, Item Task Code). Parent = query Parent (asset/project), not phases. */
 export interface MilestoneBarRow {
-  /** Query Parent – asset/project (e.g. GSK4425689, 52535-GSK689A CSP mAb - Current). Display in Parent column. */
+  /** Query Parent – asset/project (e.g. GSK4425689 - Current). Display in Parent column. */
   parent: string
+  /** Asset key for grouping: Approved + Current + Study bars for same asset group together; study bars get this from projectKey lookup. */
+  assetKey?: string
+  /** Project key from query; used to resolve asset for study rows. */
+  projectKey?: string
   /** For legend/coloring: Milestone Category + " - " + Plan Category */
   categoryLabel: string
   /** For tooltips: Task Short Description + " - " + Plan Category */
@@ -53,7 +57,7 @@ export interface MilestoneBarRow {
   /** Power BI: Item: Task code as Parent/Study. Display in Project/Study column. */
   itemTaskCode: string
   planCategory: string
-  /** Power BI: Legend: Item type */
+  /** Power BI: Legend: Item type (Project - Current | Project - Approved Governance Baseline | Study - Current). */
   itemType: string
   minDate: Date
   maxDate: Date

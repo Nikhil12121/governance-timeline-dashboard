@@ -1,21 +1,35 @@
 /**
  * Template 2: High-level project plan with financials.
- * Activity names on/in bars, financials table and legend below.
- * Respects viewMode for timeline granularity (Year / Month).
+ * Phase-based swim lanes: one row per phase (phase start→end from tasks). Inside each lane: phase bar (background) and mapped tasks/milestones (bars + diamonds at milestone dates).
+ * Phase comes from timeline query "Phase" (real data: timeline.sql outputs "Task Category" AS "Phase") or mock task.phase. Dates from Start Date / End Date (real: Earliest Task Reported Date).
+ * Financials table and legend below. Respects viewMode for timeline granularity (Year / Month).
  */
 import { useMemo } from 'react'
 import type { TimelineTask } from '@/types/timeline'
 import type { ViewMode } from '@/types/timeline'
 import type { FinancialsGanttSlide } from '@/types/presentation'
 import { GSK_THEME } from '@/theme/gsk'
+import { parseDateLocal } from '@/utils/dateUtils'
 
-const BAR_HEIGHT = 28
+const ROW_HEIGHT = 40
+const LEFT_WIDTH = 140
 const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const MILESTONE_SIZE = 10
 const PHASE_COLORS: Record<string, string> = {
   'Non-clinical': GSK_THEME.accentColor,
   'Clinical': '#2563eb',
   'VEO': '#16a34a',
   'CMC': '#dc2626',
+  'C2 Milestones': '#f59e0b',
+  'Phase 1, 2, 3 start': '#0ea5e9',
+  'Phase 1, 2, 3 Start': '#0ea5e9',
+  'Key Results': '#dc2626',
+  'Regulatory Submission / Approval / Launch': '#9333ea',
+  'Project Milestone': '#64748b',
+  'External News': '#94a3b8',
+  'Programme': '#0891b2',
+  'Regulatory': '#7c3aed',
+  'Launch': '#16a34a',
   default: '#64748b',
 }
 
@@ -35,6 +49,22 @@ function getPhaseColor(phase?: string): string {
   return PHASE_COLORS.default
 }
 
+function toDate(d: unknown): Date {
+  if (d instanceof Date) return d
+  const parsed = parseDateLocal(d as string | number)
+  return isNaN(parsed.getTime()) ? new Date() : parsed
+}
+
+interface PhaseLane {
+  phaseName: string
+  phaseStart: Date
+  phaseEnd: Date
+  phaseLeftPct: number
+  phaseWidthPct: number
+  color: string
+  items: { task: TimelineTask; leftPct: number; widthPct: number; isMilestone: boolean }[]
+}
+
 export function GanttChartTemplate2({
   tasks = [],
   financialsSlide,
@@ -42,12 +72,11 @@ export function GanttChartTemplate2({
   subtitle = 'High level project plan to launch with financials',
   viewMode = 'Year',
 }: GanttChartTemplate2Props) {
-  const { yearMin, yearMax, rows } = useMemo(() => {
+  const { yearMin, yearMax, phaseLanes } = useMemo(() => {
     const list = Array.isArray(tasks) ? tasks : []
     if (list.length === 0) {
-      return { yearMin: new Date().getFullYear(), yearMax: new Date().getFullYear() + 5, rows: [] }
+      return { yearMin: new Date().getFullYear(), yearMax: new Date().getFullYear() + 5, phaseLanes: [] as PhaseLane[] }
     }
-    const toDate = (d: unknown): Date => (d instanceof Date ? d : new Date(d as string | number))
     const dates = list.flatMap((t) => [toDate(t.start).getTime(), toDate(t.end).getTime()])
     const minT = Math.min(...dates)
     const maxT = Math.max(...dates)
@@ -56,20 +85,35 @@ export function GanttChartTemplate2({
     const totalMonths = (yearMax - yearMin + 1) * 12
     const startMonth = yearMin * 12
 
-    const rows = list.map((t) => {
-      const s = toDate(t.start).getTime()
-      const e = toDate(t.end).getTime()
-      const left = ((new Date(s).getFullYear() * 12 + new Date(s).getMonth()) - startMonth) / totalMonths
-      const right = ((new Date(e).getFullYear() * 12 + new Date(e).getMonth()) - startMonth) / totalMonths
-      const width = Math.max((right - left), 0.02)
-      return {
-        ...t,
-        left: left * 100,
-        width: width * 100,
-        color: getPhaseColor(t.phase),
-      }
-    })
-    return { yearMin, yearMax, rows }
+    const byPhase = new Map<string, TimelineTask[]>()
+    for (const t of list) {
+      const key = (t.phase && t.phase.trim()) || 'Other'
+      if (!byPhase.has(key)) byPhase.set(key, [])
+      byPhase.get(key)!.push(t)
+    }
+
+    const lanes: PhaseLane[] = []
+    for (const [phaseName, phaseTasks] of byPhase) {
+      const starts = phaseTasks.map((t) => toDate(t.start).getTime())
+      const ends = phaseTasks.map((t) => toDate(t.end).getTime())
+      const phaseStart = new Date(Math.min(...starts))
+      const phaseEnd = new Date(Math.max(...ends))
+      const color = getPhaseColor(phaseName === 'Other' ? undefined : phaseName)
+      const phaseLeftPct = ((phaseStart.getFullYear() * 12 + phaseStart.getMonth()) - startMonth) / totalMonths * 100
+      const phaseWidthPct = Math.max(((phaseEnd.getFullYear() * 12 + phaseEnd.getMonth()) - (phaseStart.getFullYear() * 12 + phaseStart.getMonth())) / totalMonths * 100, 2)
+      const items = phaseTasks.map((task) => {
+        const s = toDate(task.start).getTime()
+        const e = toDate(task.end).getTime()
+        const leftMonths = new Date(s).getFullYear() * 12 + new Date(s).getMonth() - startMonth
+        const rightMonths = new Date(e).getFullYear() * 12 + new Date(e).getMonth() - startMonth
+        const leftPct = (leftMonths / totalMonths) * 100
+        const widthPct = task.type === 'milestone' ? 0 : Math.max((rightMonths - leftMonths) / totalMonths * 100, 1.5)
+        return { task, leftPct, widthPct, isMilestone: task.type === 'milestone' }
+      })
+      lanes.push({ phaseName, phaseStart, phaseEnd, phaseLeftPct, phaseWidthPct, color, items })
+    }
+    lanes.sort((a, b) => a.phaseStart.getTime() - b.phaseStart.getTime())
+    return { yearMin, yearMax, phaseLanes: lanes }
   }, [tasks])
 
   const timelineHeaders = useMemo(() => {
@@ -94,6 +138,8 @@ export function GanttChartTemplate2({
     )
   }
 
+  const timelineMinWidth = viewMode !== 'Year' ? Math.max(timelineHeaders.length * 24, 400) : undefined
+
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden" data-gantt-template="2">
       <div className="px-4 pt-4 pb-2 border-b border-slate-100">
@@ -104,29 +150,69 @@ export function GanttChartTemplate2({
         {subtitle && <p className="text-sm text-slate-600 mt-0.5 ml-4">{subtitle}</p>}
       </div>
       <div className="px-4 pt-3 overflow-x-auto">
-        <div className="flex text-xs font-medium text-slate-600 mb-1" style={{ gap: 0, minWidth: viewMode !== 'Year' ? Math.max(timelineHeaders.length * 24, 400) : undefined }}>
-          {timelineHeaders.map((label, i) => (
-            <div key={`${label}-${i}`} className={`text-center border-r border-slate-200 last:border-r-0 ${viewMode !== 'Year' ? 'flex-shrink-0' : 'flex-1 min-w-0'}`} style={viewMode !== 'Year' ? { width: 24, minWidth: 24 } : undefined}>
-              {viewMode !== 'Year' ? label.split(' ')[0] : label}
-            </div>
-          ))}
+        <div className="flex text-xs font-medium text-slate-600 mb-1" style={{ minWidth: timelineMinWidth ? LEFT_WIDTH + timelineMinWidth : undefined }}>
+          <div className="shrink-0 border-r border-slate-200 pr-2" style={{ width: LEFT_WIDTH }}>Phase</div>
+          <div className="flex flex-1" style={{ gap: 0, minWidth: timelineMinWidth }}>
+            {timelineHeaders.map((label, i) => (
+              <div key={`${label}-${i}`} className={`text-center border-r border-slate-200 last:border-r-0 ${viewMode !== 'Year' ? 'flex-shrink-0' : 'flex-1 min-w-0'}`} style={viewMode !== 'Year' ? { width: 24, minWidth: 24 } : undefined}>
+                {viewMode !== 'Year' ? label.split(' ')[0] : label}
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="space-y-1" style={viewMode !== 'Year' ? { minWidth: timelineHeaders.length * 24 } : undefined}>
-          {rows.map((row) => (
-            <div key={row.id} className="flex items-center relative" style={{ height: BAR_HEIGHT }}>
-              <div
-                className="absolute top-0 bottom-0 rounded flex items-center px-2 overflow-hidden border border-slate-300"
-                style={{
-                  left: `${row.left}%`,
-                  width: `${row.width}%`,
-                  backgroundColor: row.color,
-                  color: '#fff',
-                  fontSize: 11,
-                  fontWeight: 500,
-                }}
-                title={`${row.name} (${(row.start instanceof Date ? row.start : new Date(row.start as string | number)).toLocaleDateString()} – ${(row.end instanceof Date ? row.end : new Date(row.end as string | number)).toLocaleDateString()})`}
-              >
-                <span className="truncate">{row.name}</span>
+        <div className="space-y-1" style={{ minWidth: timelineMinWidth ? LEFT_WIDTH + timelineMinWidth : undefined }}>
+          {phaseLanes.map((lane) => (
+            <div key={lane.phaseName} className="flex items-stretch" style={{ height: ROW_HEIGHT }}>
+              <div className="shrink-0 flex items-center pr-2 border-r border-slate-100 text-xs font-medium text-slate-700 truncate" style={{ width: LEFT_WIDTH }}>
+                {lane.phaseName}
+              </div>
+              <div className="flex-1 relative min-h-[32px] rounded border border-slate-100" style={{ minWidth: timelineMinWidth }}>
+                <div
+                  className="absolute top-1 bottom-1 rounded opacity-25"
+                  style={{
+                    left: `${lane.phaseLeftPct}%`,
+                    width: `${lane.phaseWidthPct}%`,
+                    backgroundColor: lane.color,
+                  }}
+                />
+                {lane.items.map(({ task, leftPct, widthPct, isMilestone }) =>
+                  isMilestone ? (
+                    <div
+                      key={task.id}
+                      className="absolute top-1/2 -translate-y-1/2 z-[1] flex flex-col items-center"
+                      style={{ left: `${leftPct}%`, marginLeft: -MILESTONE_SIZE / 2 }}
+                      title={`${task.name} – ${toDate(task.start).toLocaleDateString()}`}
+                    >
+                      <span className="text-[9px] font-medium text-slate-700 truncate max-w-[80px] text-center leading-tight">{task.name}</span>
+                      <div
+                        className="rounded flex-shrink-0 border-2 border-slate-700"
+                        style={{
+                          width: MILESTONE_SIZE,
+                          height: MILESTONE_SIZE,
+                          backgroundColor: lane.color,
+                          transform: 'rotate(45deg)',
+                          marginTop: 2,
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <div
+                      key={task.id}
+                      className="absolute top-1 bottom-1 rounded flex items-center px-1.5 overflow-hidden border border-slate-300 z-[1]"
+                      style={{
+                        left: `${leftPct}%`,
+                        width: `${Math.max(widthPct, 3)}%`,
+                        backgroundColor: lane.color,
+                        color: '#fff',
+                        fontSize: 10,
+                        fontWeight: 500,
+                      }}
+                      title={`${task.name} (${toDate(task.start).toLocaleDateString()} – ${toDate(task.end).toLocaleDateString()})`}
+                    >
+                      <span className="truncate">{task.name}</span>
+                    </div>
+                  )
+                )}
               </div>
             </div>
           ))}
