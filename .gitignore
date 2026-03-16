@@ -2,4 +2,11 @@ node_modules
 dist
 .vite
 *.local
+.env
 .DS_Store
+*.pptx
+*.log
+tsconfig.tsbuildinfo
+__pycache__/
+*.py[cod]
+.venv/

@@ -22,6 +22,80 @@ npm run dev
 
 Open [http://localhost:5173](http://localhost:5173). Use **Timeline** to adjust the view, then **Export & Summary** to generate a summary and download as PPT.
 
+## Backend-ready data flow
+
+The app now supports a local API for asset lookup and project data hydration.
+
+1. Start the API:
+
+```bash
+npm run server
+```
+
+2. In a second terminal, start the frontend:
+
+```bash
+npm run dev
+```
+
+3. Open the app at [http://localhost:5173](http://localhost:5173), go to **Your inputs**, select an asset, and click **Load selected asset**.
+
+The current backend runs in `mock` mode and returns Snowflake-shaped project, actual, and forecast data from `server/mock/`. Replace that repository with Snowflake queries when credentials are available.
+
+### If you see "Failed to fetch" or "No assets available" (company laptop)
+
+The frontend calls the backend at `http://localhost:8787/api`. If that fails:
+
+1. **Start the backend first** (in its own terminal):
+   ```bash
+   npm run server
+   ```
+   You should see: `Governance API running on http://localhost:8787`
+
+2. **Confirm the API is reachable** – open [http://localhost:8787/api/health](http://localhost:8787/api/health) in the browser. You should get JSON like `{"ok":true,"mode":"snowflake",...}`.
+
+3. **Set the API URL** – in the project root, create a `.env` file (copy from `.env.example`) and ensure:
+   ```env
+   VITE_API_BASE_URL=http://localhost:8787/api
+   PORT=8787
+   ```
+   Restart the frontend after changing `.env` (`Ctrl+C` then `npm run dev` again).
+
+4. **Run frontend in a second terminal:**
+   ```bash
+   npm run dev
+   ```
+   Then open [http://localhost:5173](http://localhost:5173).
+
+## Snowflake mode
+
+The backend now supports two modes:
+
+- `GOVERNANCE_DATA_MODE=mock`
+- `GOVERNANCE_DATA_MODE=snowflake`
+
+To wire Snowflake:
+
+1. Copy `.env.example` to `.env`
+2. Fill in your Snowflake connection values
+3. Paste your SQL into:
+   - `server/sql/assets.sql`
+   - `server/sql/projectSummary.sql`
+   - `server/sql/actuals.sql`
+   - `server/sql/forecast.sql`
+   - `server/sql/timeline.sql`
+   - optionally `server/sql/roleLookup.sql`
+
+Use `{{projectKey}}` in SQL files where the selected project key should be injected.
+
+Example:
+
+```sql
+SELECT *
+FROM my_table
+WHERE "Project Key" = {{projectKey}}
+```
+
 ## Tech stack
 
 - **React 18** + **TypeScript** + **Vite**
@@ -41,7 +115,17 @@ Open [http://localhost:5173](http://localhost:5173). Use **Timeline** to adjust 
 
 ## Data source (Phase 2)
 
-Timeline data will be loaded from **Snowflake** data warehouse via an API/backend. The app currently uses mock data; connect your Snowflake-backed API when ready (see `PLAN.md`).
+Recommended production architecture:
+
+- `React frontend` -> `Node/Express API` -> `Snowflake`
+- Frontend never stores Snowflake credentials
+- Backend runs the SQL and maps rows into the JSON contract used by the UI
+
+The current local API exposes:
+
+- `GET /api/health`
+- `GET /api/assets`
+- `GET /api/projects/:projectKey/governance`
 
 ## Roadmap
 
