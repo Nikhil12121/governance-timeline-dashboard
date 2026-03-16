@@ -22,26 +22,32 @@ interface ParentGroup {
   bars: MilestoneBarRow[]
 }
 
+/* Bar colors (Type) – match PM reference: Approved governance (light pink), Current Plan (light blue/gray), Study (dark gray). */
 const ITEM_TYPE_COLORS: Record<string, string> = {
   'Project - Approved Governance Baseline': '#e8a87c',
   'Project - Current': '#87ceeb',
-  'Study - Current': '#b0b0b0',
-  'Study - Approved Governance Baseline': '#c9b896',
+  'Study - Current': '#6b7280',
+  'Study - Approved Governance Baseline': '#9ca3af',
   default: '#94a3b8',
 }
 
+/* Milestone categories – exact match to reference visual: C2 (yellow), Key results (red), Other (green), Phase 1,2,&3 start (light blue), Regulatory (purple), Study (black). */
 const MILESTONE_CATEGORY_COLORS: Record<string, string> = {
   'C2 Milestones': '#facc15',
-  'Phase 1, 2, 3 Start': '#2563eb',
-  'Phase 1, 2, & 3 start': '#2563eb',
+  C2: '#facc15',
+  'Phase 1, 2, 3 Start': '#7dd3fc',
+  'Phase 1, 2, & 3 start': '#7dd3fc',
   'Submit, Approval & Launch': '#9333ea',
+  'Regulatory submission, Approval & Launch': '#9333ea',
   'Regulatory Submission / Approval / Launch': '#9333ea',
   'Pivotal Result': '#dc2626',
-  'Study Milestones': '#16a34a',
+  'Study Milestones': '#1f2937',
+  Study: '#1f2937',
   'Key results': '#dc2626',
   'Key Results': '#dc2626',
   'External News': '#64748b',
   'Project Milestone': '#94a3b8',
+  'Stacked milestones': '#1f2937',
   Other: '#22c55e',
   default: GSK_THEME.accentColor,
 }
@@ -107,7 +113,18 @@ interface MilestoneGovernanceViewProps {
   viewMode?: ViewMode
 }
 
-/** Group bars by query Parent (asset/project), not phases – per Milestone Timeline query. */
+/** Group milestones by date on a bar; same-date = stacked (show asterisk). */
+function groupMilestonesByDate(milestones: MilestoneBarRow['milestones']): { date: Date; list: typeof milestones }[] {
+  const byDate = new Map<number, typeof milestones>()
+  for (const m of milestones) {
+    const t = m.reportedDate.getTime()
+    if (!byDate.has(t)) byDate.set(t, [])
+    byDate.get(t)!.push(m)
+  }
+  return Array.from(byDate.entries()).map(([t, list]) => ({ date: new Date(t), list }))
+}
+
+/** Group bars by query Parent (asset), so Asset = parent, Project = child row. */
 function groupBarsByParent(bars: MilestoneBarRow[]): ParentGroup[] {
   const byParent = new Map<string, MilestoneBarRow[]>()
   for (const b of bars) {
@@ -202,8 +219,8 @@ export function MilestoneGovernanceView({ rows, assetName = '', viewMode = 'Mont
         <div className="shrink-0 border-r border-slate-200 bg-slate-50/50" style={{ width: LEFT_WIDTH + TOGGLE_COLUMN_WIDTH, minWidth: LEFT_WIDTH + TOGGLE_COLUMN_WIDTH }}>
           <div className="grid gap-0 border-b border-slate-200 bg-slate-100" style={{ height: HEADER_HEIGHT, gridTemplateColumns: `${TOGGLE_COLUMN_WIDTH}px 1fr 1fr` }}>
             <div className="flex items-center justify-center text-xs font-semibold text-slate-600 border-r border-slate-200" />
-            <div className="flex items-center px-2 text-xs font-semibold text-slate-700 border-r border-slate-200">Parent</div>
-            <div className="flex items-center px-2 text-xs font-semibold text-slate-700">Project / Study</div>
+            <div className="flex items-center px-2 text-xs font-semibold text-slate-700 border-r border-slate-200">Asset</div>
+            <div className="flex items-center px-2 text-xs font-semibold text-slate-700">Project</div>
           </div>
           <div className="divide-y divide-slate-100">
             {parentGroups.map((group) => {
@@ -260,7 +277,7 @@ export function MilestoneGovernanceView({ rows, assetName = '', viewMode = 'Mont
           </div>
           <div className="relative" style={{ width: TIMELINE_WIDTH, minWidth: TIMELINE_WIDTH }}>
             {isTodayInRange && (
-              <div className="absolute top-0 bottom-0 w-0 border-l-2 border-dashed border-amber-500 pointer-events-none z-10" style={{ left: todayX }} title="Today" />
+              <div className="absolute top-0 bottom-0 w-0 border-l-2 border-dashed border-slate-800 pointer-events-none z-10" style={{ left: todayX }} title="Today" />
             )}
             {parentGroups.map((group) => {
               const isExpanded = expandedParents.has(group.key)
@@ -273,6 +290,7 @@ export function MilestoneGovernanceView({ rows, assetName = '', viewMode = 'Mont
                       const xMax = xForDate(bar.maxDate)
                       const barColor = getItemTypeColor(bar.itemType)
                       const barTooltip = bar.assetProgram ? `Asset/Program: ${bar.assetProgram}` : undefined
+                      const milestoneGroups = groupMilestonesByDate(bar.milestones)
                       return (
                         <div key={`${group.key}-${bar.itemTaskCode}-${i}`} className="border-b border-slate-50 relative flex items-center bg-white" style={{ height: ROW_HEIGHT }}>
                           <div
@@ -284,30 +302,36 @@ export function MilestoneGovernanceView({ rows, assetName = '', viewMode = 'Mont
                             }}
                             title={barTooltip}
                           />
-                          {bar.milestones.map((m, j) => {
-                            const x = xForDate(m.reportedDate)
-                            const q = Math.floor(m.reportedDate.getMonth() / 3) + 1
-                            const color = getMilestoneColor(m.milestoneCategory)
+                          {milestoneGroups.map((mg, j) => {
+                            const x = xForDate(mg.date)
+                            const q = Math.floor(mg.date.getMonth() / 3) + 1
+                            const isStacked = mg.list.length > 1
+                            const color = isStacked ? '#1f2937' : getMilestoneColor(mg.list[0].milestoneCategory)
+                            const label = isStacked ? mg.list.map((m) => m.taskShortDescription).join(', ') : mg.list[0].taskShortDescription
                             return (
                               <div
                                 key={`${i}-${j}`}
                                 className="absolute flex flex-col items-center z-[2]"
-                                style={{ left: x - MILESTONE_SIZE / 2, top: 0, width: MILESTONE_SIZE, height: ROW_HEIGHT }}
+                                style={{ left: x - MILESTONE_SIZE / 2, top: 0, width: MILESTONE_SIZE * 2, height: ROW_HEIGHT }}
                               >
-                                <span className="text-[9px] font-medium text-slate-700 truncate max-w-[80px] text-center leading-tight" style={{ marginTop: 2 }}>
-                                  {m.taskShortDescription}
+                                <span className="text-[9px] font-medium text-slate-700 truncate max-w-[100px] text-center leading-tight" style={{ marginTop: 2 }}>
+                                  {label}
                                 </span>
-                                <div
-                                  className="rounded flex-shrink-0"
-                                  style={{
-                                    width: MILESTONE_SIZE,
-                                    height: MILESTONE_SIZE,
-                                    backgroundColor: color,
-                                    transform: 'rotate(45deg)',
-                                    marginTop: 0,
-                                  }}
-                                  title={m.taskShortDescription}
-                                />
+                                {isStacked ? (
+                                  <span className="text-base font-bold text-slate-800 leading-none" style={{ marginTop: 2 }} title={label}>*</span>
+                                ) : (
+                                  <div
+                                    className="rounded flex-shrink-0"
+                                    style={{
+                                      width: MILESTONE_SIZE,
+                                      height: MILESTONE_SIZE,
+                                      backgroundColor: color,
+                                      transform: 'rotate(45deg)',
+                                      marginTop: 0,
+                                    }}
+                                    title={label}
+                                  />
+                                )}
                                 <span className="text-[9px] text-slate-500">Q{q}</span>
                               </div>
                             )
@@ -321,21 +345,39 @@ export function MilestoneGovernanceView({ rows, assetName = '', viewMode = 'Mont
           </div>
         </div>
       </div>
-      <div className="px-4 py-3 border-t border-slate-200 bg-slate-50/50 flex flex-wrap gap-6 text-xs">
-        <div className="flex items-center gap-2">
+      <div className="px-4 py-3 border-t border-slate-200 bg-slate-50/50 flex flex-wrap gap-x-6 gap-y-2 text-xs">
+        <div className="flex items-center gap-3 flex-wrap">
           <span className="font-semibold text-slate-700">Type:</span>
-          {Object.entries(ITEM_TYPE_COLORS).filter(([k]) => k !== 'default').map(([label, color]) => (
-            <span key={label} className="flex items-center gap-1">
-              <span className="w-4 h-3 rounded border border-slate-300" style={{ backgroundColor: color }} />
-              <span className="text-slate-600">{label.replace(' - ', ' ')}</span>
-            </span>
-          ))}
+          <span className="flex items-center gap-1.5">
+            <span className="w-4 h-3 rounded border border-slate-300" style={{ backgroundColor: ITEM_TYPE_COLORS['Project - Approved Governance Baseline'] }} />
+            <span className="text-slate-600">Approved governance</span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-4 h-3 rounded border border-slate-300" style={{ backgroundColor: ITEM_TYPE_COLORS['Project - Current'] }} />
+            <span className="text-slate-600">Current Plan</span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-4 h-3 rounded border border-slate-300" style={{ backgroundColor: ITEM_TYPE_COLORS['Study - Current'] }} />
+            <span className="text-slate-600">Study</span>
+          </span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3 flex-wrap">
           <span className="font-semibold text-slate-700">Milestones:</span>
-          {Object.entries(MILESTONE_CATEGORY_COLORS).filter(([k]) => k !== 'default').map(([label, color]) => (
-            <span key={label} className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded border border-slate-300" style={{ backgroundColor: color, transform: 'rotate(45deg)' }} />
+          {[
+            { label: 'Stacked milestones', color: '#1f2937', shape: 'asterisk' as const },
+            { label: 'C2', color: '#facc15', shape: 'diamond' as const },
+            { label: 'Key results', color: '#dc2626', shape: 'diamond' as const },
+            { label: 'Other', color: '#22c55e', shape: 'diamond' as const },
+            { label: 'Phase 1, 2, & 3 start', color: '#7dd3fc', shape: 'diamond' as const },
+            { label: 'Regulatory submission, Approval & Launch', color: '#9333ea', shape: 'diamond' as const },
+            { label: 'Study', color: '#1f2937', shape: 'diamond' as const },
+          ].map(({ label, color, shape }) => (
+            <span key={label} className="flex items-center gap-1.5">
+              {shape === 'asterisk' ? (
+                <span className="text-slate-800 font-bold text-sm leading-none">*</span>
+              ) : (
+                <span className="w-3 h-3 rounded border border-slate-300 inline-block" style={{ backgroundColor: color, transform: 'rotate(45deg)' }} />
+              )}
               <span className="text-slate-600">{label}</span>
             </span>
           ))}

@@ -734,7 +734,9 @@ export function GovernancePPTPage({ templateId = 1 }: GovernancePPTPageProps) {
               <button type="button" onClick={zoomIn} disabled={ganttColumnWidth >= GANTT_ZOOM_MAX} className="px-2 py-1 text-xs font-medium rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50">Zoom in</button>
             </div>
             <div className="space-y-6 min-w-0 max-w-full">
-              {presentation.slides.map((slide, index) => (
+              {presentation.slides
+                .filter((_, i) => i !== 3)
+                .map((slide, index) => (
                 <div key={slide.id} className="min-w-0 max-w-full">
                   <SlidePreviewCard
                     slide={slide}
