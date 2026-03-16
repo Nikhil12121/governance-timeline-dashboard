@@ -23,6 +23,18 @@ export const projectRows = [
     portfolioOwner: 'Respiratory Portfolio',
     lastUpdated: '2026-02-18',
   },
+  {
+    projectKey: 'demo-llm',
+    projectId: 'DEMO-LLM-001',
+    assetName: 'Vidru Governance Demo',
+    projectDescription: 'Sample project for testing LLM-generated analysis: Decision, Input, Awareness and executive summary from project metadata, timeline and cost/FTE.',
+    projectShortDescription: 'LLM demo – governance analysis from sample data',
+    currentPhase: 'Phase II',
+    projectStatus: 'Active',
+    projectManager: 'Governance Team',
+    portfolioOwner: 'PCT Portfolio',
+    lastUpdated: '2026-03-09',
+  },
 ]
 
 export const actualRows = [
@@ -38,6 +50,10 @@ export const actualRows = [
   { projectKey: '1002', dateKey: '20240101', personRoleKey: '201', fte: 2.8, ipeAmountGbp: 350000, epeAmountGbp: 0 },
   { projectKey: '1002', dateKey: '20250101', personRoleKey: '202', fte: 3.5, ipeAmountGbp: 460000, epeAmountGbp: 0 },
   { projectKey: '1002', dateKey: '20260101', personRoleKey: '-1', fte: 0, ipeAmountGbp: 0, epeAmountGbp: 1020000 },
+  { projectKey: 'demo-llm', dateKey: '20250101', personRoleKey: '101', fte: 4.0, ipeAmountGbp: 520000, epeAmountGbp: 0 },
+  { projectKey: 'demo-llm', dateKey: '20250101', personRoleKey: '-1', fte: 0, ipeAmountGbp: 0, epeAmountGbp: 800000 },
+  { projectKey: 'demo-llm', dateKey: '20260101', personRoleKey: '101', fte: 5.2, ipeAmountGbp: 680000, epeAmountGbp: 0 },
+  { projectKey: 'demo-llm', dateKey: '20260101', personRoleKey: '-1', fte: 0, ipeAmountGbp: 0, epeAmountGbp: 950000 },
 ]
 
 export const forecastRows = [
@@ -53,6 +69,10 @@ export const forecastRows = [
   { projectKey: '1002', dateKey: '20240101', personRoleKey: '201', currentForecastFte: 3.0, ipeAmountGbp: 390000, epeAmountGbp: 0, governanceApprovedFte: 2.8, governanceIpeAmountGbp: 370000, governanceEpeAmountGbp: 0 },
   { projectKey: '1002', dateKey: '20250101', personRoleKey: '202', currentForecastFte: 3.9, ipeAmountGbp: 500000, epeAmountGbp: 0, governanceApprovedFte: 3.6, governanceIpeAmountGbp: 480000, governanceEpeAmountGbp: 0 },
   { projectKey: '1002', dateKey: '20260101', personRoleKey: '-1', currentForecastFte: 0, ipeAmountGbp: 0, epeAmountGbp: 1100000, governanceApprovedFte: 0, governanceIpeAmountGbp: 0, governanceEpeAmountGbp: 1050000 },
+  { projectKey: 'demo-llm', dateKey: '20250101', personRoleKey: '101', currentForecastFte: 4.2, ipeAmountGbp: 540000, epeAmountGbp: 0, governanceApprovedFte: 4.0, governanceIpeAmountGbp: 520000, governanceEpeAmountGbp: 0 },
+  { projectKey: 'demo-llm', dateKey: '20250101', personRoleKey: '-1', currentForecastFte: 0, ipeAmountGbp: 0, epeAmountGbp: 820000, governanceApprovedFte: 0, governanceIpeAmountGbp: 0, governanceEpeAmountGbp: 800000 },
+  { projectKey: 'demo-llm', dateKey: '20260101', personRoleKey: '101', currentForecastFte: 5.5, ipeAmountGbp: 720000, epeAmountGbp: 0, governanceApprovedFte: 5.2, governanceIpeAmountGbp: 680000, governanceEpeAmountGbp: 0 },
+  { projectKey: 'demo-llm', dateKey: '20260101', personRoleKey: '-1', currentForecastFte: 0, ipeAmountGbp: 0, epeAmountGbp: 980000, governanceApprovedFte: 0, governanceIpeAmountGbp: 0, governanceEpeAmountGbp: 950000 },
 ]
 
 export const roleLabels = {
@@ -75,5 +95,11 @@ export const timelineTasksByProject = {
     { id: 'proj-1002-root', name: 'Orion-17 programme', start: '2024-01-01', end: '2026-12-31', progress: 61, type: 'project', phase: 'Programme' },
     { id: 'proj-1002-reg', name: 'Registration prep', start: '2024-06-01', end: '2025-12-31', progress: 70, type: 'task', project: 'proj-1002-root', phase: 'Regulatory' },
     { id: 'proj-1002-launch', name: 'EU launch', start: '2026-04-15', end: '2026-04-15', progress: 0, type: 'milestone', project: 'proj-1002-root', phase: 'Launch' },
+  ],
+  'demo-llm': [
+    { id: 'demo-root', name: 'Vidru Governance Demo programme', start: '2025-01-01', end: '2026-12-31', progress: 35, type: 'project', phase: 'Programme' },
+    { id: 'demo-ph2', name: 'Phase II execution', start: '2025-02-01', end: '2025-09-30', progress: 60, type: 'task', project: 'demo-root', phase: 'Clinical' },
+    { id: 'demo-eop2', name: 'EOP2 milestone', start: '2025-10-01', end: '2025-10-01', progress: 0, type: 'milestone', project: 'demo-root', phase: 'Clinical' },
+    { id: 'demo-ph3', name: 'Phase III start', start: '2025-11-01', end: '2026-08-31', progress: 10, type: 'task', project: 'demo-root', phase: 'Clinical' },
   ],
 }
