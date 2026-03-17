@@ -84,6 +84,10 @@ app.post('/api/analyze/summary', async (req, res) => {
 
 app.listen(port, () => {
   console.log(`Governance API running on http://localhost:${port} (${mode} mode)`)
+  const llmBackend = (process.env.LLM_BACKEND_URL || '').replace(/\/$/, '')
+  if (llmBackend) {
+    console.log(`Summary: will try Python LLM backend first at ${llmBackend}`)
+  }
   const hasAzure = !!(process.env.AZURE_OPENAI_ENDPOINT && process.env.AZURE_OPENAI_API_KEY)
   console.log(`Azure OpenAI: ${hasAzure ? 'configured (' + (process.env.AZURE_OPENAI_DEPLOYMENT || 'gpt-5.2') + ')' : 'not configured (set .env)'}`)
 })

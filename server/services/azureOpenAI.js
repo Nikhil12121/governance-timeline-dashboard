@@ -23,6 +23,7 @@ function log(msg) {
 
 /**
  * Fetch with timeout and retries for transient failures (network errors, 429, 503).
+ * For 404 we return the response so the caller can return null and try the next API shape (e.g. Chat Completions).
  */
 async function fetchWithRetry(url, options = {}) {
   let lastErr
@@ -40,7 +41,8 @@ async function fetchWithRetry(url, options = {}) {
         await new Promise((r) => setTimeout(r, delay))
         continue
       }
-      throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`)
+      // 404 / 400 etc: return response so caller can log and try next API (don't throw)
+      return { ok: false, status: res.status, text: () => Promise.resolve(text) }
     } catch (err) {
       clearTimeout(timeoutId)
       lastErr = err
@@ -135,15 +137,22 @@ async function tryChatCompletions(messages, endpoint, apiKey, deployment, apiVer
   }
 }
 
-/** API versions to try (Responses first for Global Standard, then Chat). */
+/** Chat Completions api-versions (try first – most Azure resources support this). */
+const CHAT_VERSIONS = ['2024-02-15-preview', '2024-08-01-preview', '2023-05-15', '2024-10-21']
+/** Responses API api-versions (newer “Global Standard” – may not exist on all resources). */
 const RESPONSES_VERSIONS = ['2025-04-01-preview', '2025-03-01-preview']
-const CHAT_VERSIONS = ['2024-08-01-preview', '2024-02-15-preview', '2024-10-21']
 
 export async function chatCompletion(messages) {
   const { endpoint, apiKey, deployment, apiVersion: envVersion } = getConfig()
   const input = messagesToInput(messages)
 
-  // 1) Responses API (Portal often shows /openai/responses – try first)
+  // 1) Chat Completions first (most Azure OpenAI resources support this path)
+  for (const ver of [envVersion, ...CHAT_VERSIONS].filter((v, i, a) => a.indexOf(v) === i)) {
+    const out = await tryChatCompletions(messages, endpoint, apiKey, deployment, ver)
+    if (out) return out
+  }
+
+  // 2) Responses API (optional; 404 is normal if resource only has Chat)
   for (const ver of [envVersion, ...RESPONSES_VERSIONS].filter((v, i, a) => a.indexOf(v) === i)) {
     let out = await tryResponsesDeploymentInPath(input, deployment, endpoint, apiKey, ver)
     if (out) return out
@@ -153,14 +162,8 @@ export async function chatCompletion(messages) {
     if (out) return out
   }
 
-  // 2) Chat Completions
-  for (const ver of [envVersion, ...CHAT_VERSIONS].filter((v, i, a) => a.indexOf(v) === i)) {
-    const out = await tryChatCompletions(messages, endpoint, apiKey, deployment, ver)
-    if (out) return out
-  }
-
   log(`All attempts failed. Endpoint: ${endpoint}, Deployment: ${deployment}. Check .env and Azure Portal.`)
   throw new Error(
-    'Azure OpenAI failed. Check the server terminal for [Azure OpenAI] lines. Ensure AZURE_OPENAI_DEPLOYMENT matches the deployment name in Azure (e.g. gpt-5.2) and the deployment supports Chat or Responses API.'
+    'Azure OpenAI failed (all API shapes returned 404 or error). Check: (1) AZURE_OPENAI_DEPLOYMENT must match the exact deployment name in Azure Portal (e.g. gpt-4o, gpt-4, o4-mini). (2) AZURE_OPENAI_ENDPOINT must be https://YOUR_RESOURCE.openai.azure.com. (3) See server terminal for [Azure OpenAI] lines.'
   )
 }

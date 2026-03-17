@@ -1,9 +1,11 @@
 /**
  * GenAI analysis: consultation (Decision / Input / Awareness) and summary.
- * Uses your Azure OpenAI endpoint and API key only – no proxy, no workaround.
+ * Summary: if LLM_BACKEND_URL is set, tries Python backend first (POST /api/generate-summary); else uses Node Azure OpenAI.
  * Analyzes: selected timeline data, project metadata, and cost/FTE (financials).
  */
 import { chatCompletion } from './azureOpenAI.js'
+
+const LLM_BACKEND_URL = (process.env.LLM_BACKEND_URL || '').replace(/\/$/, '')
 
 /** Build rich context from governance data: project metadata, selected timeline, cost/FTE. */
 function buildContextFromGovernance(data, visibleTimelineSummary = '') {
@@ -179,6 +181,18 @@ const SUMMARY_TYPE_FOCUS = {
   'Decision oriented': 'Focus on what the Board needs to decide: Paragraph 1: project status and key milestones. Paragraph 2: timeline and dependencies. Paragraph 3: financial and resource implications to support decision-making.',
 }
 
+/** Payload for Python backend /api/generate-summary (only fields it accepts). */
+function payloadForPythonBackend(structured) {
+  return {
+    project_name: structured.project_name ?? '',
+    project_id: structured.project_id ?? '',
+    timeline_title: structured.timeline_title ?? '',
+    timeline_tasks: structured.timeline_tasks ?? [],
+    financial_year_headers: structured.financial_year_headers ?? [],
+    financial_rows: structured.financial_rows ?? [],
+  }
+}
+
 export async function generateSummary(projectKey, getGovernanceData, visibleTimelineSummary = '', summaryType = '', customInstruction = '') {
   let data
   try {
@@ -188,6 +202,30 @@ export async function generateSummary(projectKey, getGovernanceData, visibleTime
   }
 
   const structured = buildStructuredSummaryInput(data, visibleTimelineSummary)
+
+  if (LLM_BACKEND_URL) {
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 120_000)
+      const res = await fetch(`${LLM_BACKEND_URL}/api/generate-summary`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payloadForPythonBackend(structured)),
+        signal: controller.signal,
+      })
+      clearTimeout(timeoutId)
+      const json = await res.json().catch(() => ({}))
+      if (res.ok && typeof json.body === 'string' && json.body.trim()) {
+        return json.body.trim()
+      }
+      if (!res.ok) {
+        console.error('[Summary] Python backend error:', res.status, json?.detail ?? await res.text())
+      }
+    } catch (err) {
+      console.error('[Summary] Python backend unreachable:', err?.message || err)
+    }
+  }
+
   const context = buildContextFromGovernance(data, visibleTimelineSummary)
   const inputDataJson = JSON.stringify(structured, null, 2)
   const focus = SUMMARY_TYPE_FOCUS[summaryType] || SUMMARY_TYPE_FOCUS['Executive']
