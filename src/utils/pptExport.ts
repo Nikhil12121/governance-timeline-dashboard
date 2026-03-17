@@ -145,6 +145,9 @@ export async function exportPresentationToPptx(
   let pageNum = 0
 
   for (const s of presentation.slides) {
+    // Skip combined Gantt + financials slide in exported deck (requested to remove 4th slide).
+    if (s.type === 'financials-gantt') continue
+
     pageNum++
     const slide = pptx.addSlide()
 
@@ -350,57 +353,6 @@ export async function exportPresentationToPptx(
       } else {
         addTimelineTable(slide, timelineTasks)
       }
-    } else if (s.type === 'financials-gantt') {
-      slide.addShape('rect', {
-        x: 0.5,
-        y: 0.35,
-        w: 0.12,
-        h: 0.15,
-        fill: { color: TEMPLATE.titleAccentColor },
-      })
-      slide.addText(s.title, {
-        x: 0.65,
-        y: 0.3,
-        w: 8,
-        h: 0.3,
-        fontSize: 18,
-        bold: true,
-        color: TEMPLATE.titleAccentColor,
-      })
-      if (s.subtitle) {
-        slide.addText(s.subtitle, {
-          x: 0.65,
-          y: 0.55,
-          w: 8,
-          h: 0.25,
-          fontSize: 12,
-          color: TEMPLATE.footerColor,
-        })
-      }
-      let yCur = 0.85
-      if (timelineChartImage?.trim()) {
-        addGanttImage(slide, timelineChartImage, yCur, 2.2)
-        yCur += 2.25
-      }
-      const cols = s.financialsYears.length
-      const colW = 9 / Math.max(cols, 1)
-      const finRows: TableCell[][] = [
-        s.financialsYears.map((h) => ({ text: h })),
-        ...s.financialsRows.map((r) => {
-          const row: TableCell[] = [{ text: r.label }, ...r.values.map((v) => ({ text: String(v) }))]
-          while (row.length < cols) row.push({ text: '' })
-          return row.slice(0, cols)
-        }),
-      ]
-      slide.addTable(finRows, {
-        x: 0.5,
-        y: yCur,
-        w: 9,
-        colW: Array(cols).fill(colW),
-        fontSize: 9,
-        border: { type: 'solid', pt: 0.25, color: '666666' },
-        margin: 0.03,
-      })
     } else if (s.type === 'scenarios') {
       slide.addShape('rect', {
         x: 0.5,
@@ -456,7 +408,7 @@ export async function exportPresentationToPptx(
       }
     } else if (s.type === 'resource-demand') {
       addTitleBlock(slide, s.title, { subtitle: s.subtitle, y: 0.25 })
-      const allRows: TableCell[][] = [s.columnHeaders.map((h) => ({ text: h }))]
+      let allRows: TableCell[][] = [s.columnHeaders.map((h) => ({ text: h }))]
       for (const grp of s.groups) {
         for (const row of grp.rows) {
           allRows.push([
@@ -465,7 +417,21 @@ export async function exportPresentationToPptx(
           ])
         }
       }
-      allRows.push(s.totalRow.map((v) => ({ text: String(v) })))
+      // Always keep a total row at the bottom.
+      const totalRow = s.totalRow.map((v) => ({ text: String(v) }))
+
+      // Limit table height: at most 9 rows including header and total.
+      // Strategy: header + first N body rows + total so nothing flows off the page.
+      if (allRows.length > 1) {
+        const bodyRows = allRows.slice(1)
+        const maxRows = 9
+        const maxBody = Math.max(0, maxRows - 2) // header + total
+        const limitedBody = bodyRows.slice(0, maxBody)
+        allRows = [allRows[0], ...limitedBody, totalRow]
+      } else {
+        allRows.push(totalRow)
+      }
+
       const numCols = s.columnHeaders.length
       const colW = 9 / numCols
       slide.addTable(allRows, {
