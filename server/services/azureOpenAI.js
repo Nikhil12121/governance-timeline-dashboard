@@ -1,7 +1,11 @@
 /**
  * Azure OpenAI – works with both Chat Completions and Responses API (Global Standard).
  * Set AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_KEY, AZURE_OPENAI_DEPLOYMENT in .env.
+ * Uses retries with backoff and a request timeout to reduce intermittent "fetch failed" errors.
  */
+const REQUEST_TIMEOUT_MS = Number(process.env.AZURE_OPENAI_TIMEOUT_MS) || 90_000
+const MAX_RETRIES = Number(process.env.AZURE_OPENAI_MAX_RETRIES) || 3
+
 function getConfig() {
   const endpoint = process.env.AZURE_OPENAI_ENDPOINT
   const apiKey = process.env.AZURE_OPENAI_API_KEY
@@ -17,6 +21,44 @@ function log(msg) {
   console.error('[Azure OpenAI]', msg)
 }
 
+/**
+ * Fetch with timeout and retries for transient failures (network errors, 429, 503).
+ */
+async function fetchWithRetry(url, options = {}) {
+  let lastErr
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+    try {
+      const res = await fetch(url, { ...options, signal: controller.signal })
+      clearTimeout(timeoutId)
+      if (res.ok) return res
+      const text = await res.text()
+      if (attempt < MAX_RETRIES && (res.status === 429 || res.status === 503)) {
+        const delay = 1000 * Math.pow(2, attempt)
+        log(`Retry in ${delay}ms after ${res.status}: ${text.slice(0, 100)}`)
+        await new Promise((r) => setTimeout(r, delay))
+        continue
+      }
+      throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`)
+    } catch (err) {
+      clearTimeout(timeoutId)
+      lastErr = err
+      const isRetryable =
+        err?.name === 'AbortError' ||
+        (err?.message && /fetch failed|ECONNRESET|ETIMEDOUT|ENOTFOUND|ECONNREFUSED/i.test(err.message))
+      if (attempt < MAX_RETRIES && isRetryable) {
+        const delay = 1000 * Math.pow(2, attempt)
+        log(`Retry in ${delay}ms after ${err?.message || err}`)
+        await new Promise((r) => setTimeout(r, delay))
+      } else {
+        throw lastErr
+      }
+    }
+  }
+  throw lastErr
+}
+
 /** Convert messages to a single string for Responses API (input can be string). */
 function messagesToInput(messages) {
   if (!Array.isArray(messages) || messages.length === 0) return ''
@@ -28,7 +70,7 @@ function messagesToInput(messages) {
 async function tryResponsesDeploymentInPath(input, deployment, endpoint, apiKey, apiVersion) {
   const url = `${endpoint}/openai/deployments/${deployment}/responses?api-version=${encodeURIComponent(apiVersion)}`
   log(`Trying Responses (deployment in path): ${url.replace(apiKey.slice(0, 8), '***')}`)
-  const res = await fetch(url, {
+  const res = await fetchWithRetry(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'api-key': apiKey },
     body: JSON.stringify({ input, max_output_tokens: 2048, temperature: 0.4 }),
@@ -51,7 +93,7 @@ async function tryResponsesDeploymentInPath(input, deployment, endpoint, apiKey,
 async function tryResponsesWithModelInBody(input, deployment, endpoint, apiKey, apiVersion, path = '/openai/responses') {
   const url = `${endpoint}${path}?api-version=${encodeURIComponent(apiVersion)}`
   log(`Trying Responses (${path}): ${url.replace(apiKey.slice(0, 8), '***')}`)
-  const res = await fetch(url, {
+  const res = await fetchWithRetry(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'api-key': apiKey },
     body: JSON.stringify({ model: deployment, input, max_output_tokens: 2048, temperature: 0.4 }),
@@ -74,7 +116,7 @@ async function tryResponsesWithModelInBody(input, deployment, endpoint, apiKey, 
 async function tryChatCompletions(messages, endpoint, apiKey, deployment, apiVersion) {
   const url = `${endpoint}/openai/deployments/${deployment}/chat/completions?api-version=${encodeURIComponent(apiVersion)}`
   log(`Trying Chat Completions: ${url.replace(apiKey.slice(0, 8), '***')}`)
-  const res = await fetch(url, {
+  const res = await fetchWithRetry(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'api-key': apiKey },
     body: JSON.stringify({ messages, max_tokens: 2048, temperature: 0.4 }),
