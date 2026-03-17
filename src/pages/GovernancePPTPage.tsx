@@ -7,10 +7,9 @@ import { generateTimelineSummary, generateKeyMessages } from '@/utils/summary'
 import { exportPresentationToPptx } from '@/utils/pptExport'
 import { fetchAssetOptions, fetchGovernanceProjectData, fetchConsultationAnalysis, fetchSummaryAnalysis } from '@/lib/governanceApi'
 import { TimelineFilters } from '@/components/timeline/TimelineFilters'
-import { GanttChart } from '@/components/timeline/GanttChart'
 import { GanttChartTemplate2 } from '@/components/timeline/GanttChartTemplate2'
 import { GanttChartTemplate3 } from '@/components/timeline/GanttChartTemplate3'
-import { MilestoneGovernanceView } from '@/components/timeline/MilestoneGovernanceView'
+import { TimelinePhaseGanttView } from '@/components/timeline/TimelinePhaseGanttView'
 import { EditContextModal } from '@/components/timeline/EditContextModal'
 import { SlidePreviewCard } from '@/components/presentation/SlidePreview'
 import { GSK_THEME } from '@/theme/gsk'
@@ -120,6 +119,14 @@ export function GovernancePPTPage({ templateId = 1 }: GovernancePPTPageProps) {
     }
     return timelineTasksToMilestoneRows(filteredTasks, selectedProjectKey || '', lastLoadedProjectLabel ?? undefined, lastLoadedProjectLabel ?? undefined)
   }, [milestoneTimelineRowsFromApi, dateRange, filteredTasks, selectedProjectKey, lastLoadedProjectLabel])
+
+  /** For Timeline tab: phases = milestone categories (no Approved). Used for phase filter and phase-based Gantt. */
+  const timelinePhases = useMemo(() => {
+    const current = effectiveMilestoneRows.filter(
+      (r) => !(r.itemType ?? '').toLowerCase().includes('approved') && !(r.planCategory ?? '').toLowerCase().includes('approved')
+    )
+    return [...new Set(current.map((r) => (r.milestoneCategory && r.milestoneCategory.trim()) || 'Other').filter(Boolean))].sort()
+  }, [effectiveMilestoneRows])
 
   const titleSlide = presentation.slides.find((s) => s.type === 'title')
   const consultationSlide = presentation.slides.find((s) => s.type === 'consultation-objectives')
@@ -369,16 +376,18 @@ export function GovernancePPTPage({ templateId = 1 }: GovernancePPTPageProps) {
             assetName={assetNameForTemplate2}
             subtitle={financialsGanttSlide?.type === 'financials-gantt' ? financialsGanttSlide.subtitle : undefined}
             viewMode={viewMode}
+            dateRange={dateRange}
           />
         ) : templateId === 3 ? (
-          <GanttChartTemplate3 tasks={filteredTasks} assetName={assetNameForTemplate2} timelineWidth={640} viewMode={viewMode} />
+          <GanttChartTemplate3 tasks={filteredTasks} assetName={assetNameForTemplate2} timelineWidth={640} viewMode={viewMode} dateRange={dateRange} />
         ) : (
-          <GanttChart
-            tasks={ganttTasks}
+          <TimelinePhaseGanttView
+            rows={effectiveMilestoneRows}
+            assetName={lastLoadedProjectLabel ?? undefined}
+            subtitle={lastLoadedProjectLabel ? `Timeline from Snowflake-ready data for ${lastLoadedProjectLabel}` : undefined}
             viewMode={viewMode}
-            listCellWidth={`${listCellWidth}px`}
-            phaseColumnWidth={phaseColumnWidth}
-            columnWidth={ganttColumnWidth}
+            dateRange={dateRange}
+            filterPhases={filterPhases}
           />
         )}
       </div>
@@ -636,10 +645,12 @@ export function GovernancePPTPage({ templateId = 1 }: GovernancePPTPageProps) {
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
             <h2 className="text-lg font-semibold text-slate-800 mb-2">Timeline & data</h2>
             <p className="text-sm text-slate-600 mb-4">
-              Customise the view. Drag task bars to fix dates if the visual is mismatched; double-click a task to add manual context. This data drives the timeline and financials slides in the PPT.
+              {templateId === 1
+                ? 'Select phases below to show one phase per row (no Approved governance lane). Use the date filter to narrow the timeline. This data drives the timeline slide in the PPT.'
+                : 'Customise the view. Drag task bars to fix dates if the visual is mismatched; double-click a task to add manual context. This data drives the timeline and financials slides in the PPT.'}
             </p>
             <TimelineFilters
-              phases={phases}
+              phases={templateId === 1 && timelinePhases.length > 0 ? timelinePhases : phases}
               filterPhases={filterPhases}
               setFilterPhases={setFilterPhases}
               showMilestonesOnly={showMilestonesOnly}
@@ -650,16 +661,18 @@ export function GovernancePPTPage({ templateId = 1 }: GovernancePPTPageProps) {
               setDateRange={setDateRange}
             />
             {templateId === 2 ? (
-              <GanttChartTemplate2 tasks={filteredTasks} financialsSlide={financialsGanttSlide?.type === 'financials-gantt' ? financialsGanttSlide : null} assetName={assetNameForTemplate2} subtitle={financialsGanttSlide?.type === 'financials-gantt' ? financialsGanttSlide.subtitle : undefined} viewMode={viewMode} />
+              <GanttChartTemplate2 tasks={filteredTasks} financialsSlide={financialsGanttSlide?.type === 'financials-gantt' ? financialsGanttSlide : null} assetName={assetNameForTemplate2} subtitle={financialsGanttSlide?.type === 'financials-gantt' ? financialsGanttSlide.subtitle : undefined} viewMode={viewMode} dateRange={dateRange} />
             ) : templateId === 3 ? (
-              <GanttChartTemplate3 tasks={filteredTasks} assetName={assetNameForTemplate2} timelineWidth={640} viewMode={viewMode} />
+              <GanttChartTemplate3 tasks={filteredTasks} assetName={assetNameForTemplate2} timelineWidth={640} viewMode={viewMode} dateRange={dateRange} />
             ) : (
               <div className="max-w-full overflow-x-auto">
-                <MilestoneGovernanceView
+                <TimelinePhaseGanttView
                   rows={effectiveMilestoneRows}
                   assetName={lastLoadedProjectLabel ?? undefined}
+                  subtitle={lastLoadedProjectLabel ? `Timeline from Snowflake-ready data for ${lastLoadedProjectLabel}` : undefined}
                   viewMode={viewMode}
                   dateRange={dateRange}
+                  filterPhases={filterPhases}
                 />
               </div>
             )}
@@ -810,6 +823,7 @@ export function GovernancePPTPage({ templateId = 1 }: GovernancePPTPageProps) {
                     listCellWidth={listCellWidth}
                     milestoneTimelineRows={templateId === 1 && (slide.type === 'timeline' || slide.type === 'financials-gantt') ? effectiveMilestoneRows : undefined}
                     dateRange={slide.type === 'timeline' || slide.type === 'financials-gantt' ? dateRange : undefined}
+                    filterPhases={templateId === 1 ? filterPhases : undefined}
                   />
                 </div>
               ))}
@@ -845,16 +859,19 @@ export function GovernancePPTPage({ templateId = 1 }: GovernancePPTPageProps) {
                       assetName={assetNameForTemplate2}
                       subtitle={financialsGanttSlide?.type === 'financials-gantt' ? financialsGanttSlide.subtitle : undefined}
                       viewMode={viewMode}
+                      dateRange={dateRange}
                     />
                   ) : templateId === 3 ? (
-                    <GanttChartTemplate3 tasks={filteredTasks} assetName={assetNameForTemplate2} timelineWidth={800} viewMode={viewMode} />
+                    <GanttChartTemplate3 tasks={filteredTasks} assetName={assetNameForTemplate2} timelineWidth={800} viewMode={viewMode} dateRange={dateRange} />
                   ) : (
                     <div className="max-w-full overflow-x-auto">
-                      <MilestoneGovernanceView
+                      <TimelinePhaseGanttView
                         rows={effectiveMilestoneRows}
                         assetName={lastLoadedProjectLabel ?? undefined}
+                        subtitle={lastLoadedProjectLabel ? `Timeline from Snowflake-ready data for ${lastLoadedProjectLabel}` : undefined}
                         viewMode={viewMode}
                         dateRange={dateRange}
+                        filterPhases={filterPhases}
                       />
                     </div>
                   )}

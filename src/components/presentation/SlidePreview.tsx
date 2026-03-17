@@ -7,7 +7,7 @@ import type { MilestoneTimelineRow } from '@/types/milestoneTimeline'
 import { GanttChart } from '@/components/timeline/GanttChart'
 import { GanttChartTemplate2 } from '@/components/timeline/GanttChartTemplate2'
 import { GanttChartTemplate3 } from '@/components/timeline/GanttChartTemplate3'
-import { MilestoneGovernanceView } from '@/components/timeline/MilestoneGovernanceView'
+import { TimelinePhaseGanttView } from '@/components/timeline/TimelinePhaseGanttView'
 import { parseDateLocal } from '@/utils/dateUtils'
 
 const GSK = {
@@ -88,6 +88,7 @@ export function SlidePreviewCard({
   listCellWidth,
   milestoneTimelineRows,
   dateRange,
+  filterPhases = [],
 }: {
   slide: Slide
   pageNum: number
@@ -99,13 +100,13 @@ export function SlidePreviewCard({
   templateId?: 1 | 2 | 3
   financialsGanttSlide?: FinancialsGanttSlideType | null
   assetNameLabel?: string
-  /** For template 1: use same Phase + Activity columns as Timeline & analysis (no From/To) */
   phaseColumnWidth?: number
   listCellWidth?: number
-  /** For template 1: Milestone & Governance rows (same as Timeline & data tab); when set, preview shows MilestoneGovernanceView */
+  /** For template 1: milestone rows; when set, preview shows TimelinePhaseGanttView */
   milestoneTimelineRows?: MilestoneTimelineRow[]
-  /** When set, milestone view axis is clamped to this range (same as Timeline & analysis). */
   dateRange?: { start: Date; end: Date } | null
+  /** For template 1: selected phase (category) names for Timeline phase Gantt */
+  filterPhases?: string[]
 }) {
   const effectiveViewMode = viewMode ?? 'Month'
   const hasChartData = templateId === 1
@@ -192,19 +193,22 @@ export function SlidePreviewCard({
                   assetName={assetNameLabel}
                   subtitle={(slide as import('@/types/presentation').TimelineSlide).subtitle}
                   viewMode={effectiveViewMode}
+                  dateRange={dateRange ?? undefined}
                 />
               </div>
             ) : templateId === 3 && timelineTasks.length > 0 ? (
               <div className="flex-1 min-h-[320px] rounded-lg border border-slate-200 overflow-x-auto overflow-y-hidden bg-white">
-                <GanttChartTemplate3 tasks={timelineTasks} assetName={assetNameLabel} timelineWidth={520} viewMode={effectiveViewMode} />
+                <GanttChartTemplate3 tasks={timelineTasks} assetName={assetNameLabel} timelineWidth={520} viewMode={effectiveViewMode} dateRange={dateRange ?? undefined} />
               </div>
             ) : templateId === 1 && milestoneTimelineRows && milestoneTimelineRows.length > 0 ? (
               <div className="flex-1 min-h-[320px] rounded-lg border border-slate-200 overflow-x-auto overflow-y-hidden bg-white">
-                <MilestoneGovernanceView
+                <TimelinePhaseGanttView
                   rows={milestoneTimelineRows}
                   assetName={assetNameLabel}
+                  subtitle={assetNameLabel ? `Timeline from Snowflake-ready data for ${assetNameLabel}` : undefined}
                   viewMode={effectiveViewMode}
                   dateRange={dateRange ?? undefined}
+                  filterPhases={filterPhases}
                 />
               </div>
             ) : ganttTasks && ganttTasks.length > 0 && effectiveViewMode ? (
@@ -287,15 +291,16 @@ export function SlidePreviewCard({
                 assetName={assetNameLabel}
                 subtitle={slide.subtitle}
                 viewMode={effectiveViewMode}
+                dateRange={dateRange ?? undefined}
               />
             </div>
           ) : templateId === 3 && timelineTasks.length > 0 ? (
             <div className="mt-2 flex-1 min-h-[220px] rounded-lg border border-slate-200 overflow-x-auto overflow-y-hidden bg-white">
-              <GanttChartTemplate3 tasks={timelineTasks} assetName={assetNameLabel} timelineWidth={520} viewMode={effectiveViewMode} />
+              <GanttChartTemplate3 tasks={timelineTasks} assetName={assetNameLabel} timelineWidth={520} viewMode={effectiveViewMode} dateRange={dateRange ?? undefined} />
             </div>
           ) : templateId === 1 && milestoneTimelineRows && milestoneTimelineRows.length > 0 ? (
             <div className="mt-2 flex-1 min-h-[220px] rounded-lg border border-slate-200 overflow-x-auto overflow-y-hidden bg-white">
-              <MilestoneGovernanceView rows={milestoneTimelineRows} assetName={assetNameLabel} viewMode={effectiveViewMode} dateRange={dateRange ?? undefined} />
+              <TimelinePhaseGanttView rows={milestoneTimelineRows} assetName={assetNameLabel} subtitle={assetNameLabel ? `Timeline from Snowflake-ready data for ${assetNameLabel}` : undefined} viewMode={effectiveViewMode} dateRange={dateRange ?? undefined} filterPhases={filterPhases} />
             </div>
           ) : ganttTasks && ganttTasks.length > 0 && effectiveViewMode ? (
             <div className="mt-2 flex-1 min-h-[220px] rounded-lg border border-slate-200 overflow-x-auto overflow-y-hidden bg-white">

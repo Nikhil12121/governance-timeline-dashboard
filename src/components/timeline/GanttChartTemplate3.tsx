@@ -19,6 +19,8 @@ interface GanttChartTemplate3Props {
   assetName?: string
   timelineWidth?: number
   viewMode?: ViewMode
+  /** When set, axis and data are clamped to this range (date filter). */
+  dateRange?: { start: Date; end: Date } | null
 }
 
 interface ParentRow {
@@ -34,12 +36,13 @@ export function GanttChartTemplate3({
   assetName = '',
   timelineWidth = 640,
   viewMode = 'Year',
+  dateRange = null,
 }: GanttChartTemplate3Props) {
   const [expandedParents, setExpandedParents] = useState<Set<string>>(() => new Set())
 
   const { parents, yearMin, yearMax, totalMonths, startMonth } = useMemo(() => {
     const list = Array.isArray(tasks) ? tasks : []
-    if (list.length === 0) {
+    if (list.length === 0 && !dateRange?.start) {
       return {
         parents: [] as ParentRow[],
         yearMin: new Date().getFullYear(),
@@ -48,9 +51,20 @@ export function GanttChartTemplate3({
         startMonth: new Date().getFullYear() * 12,
       }
     }
-    const dates = list.flatMap((t) => [toDate(t.start).getTime(), toDate(t.end).getTime()])
-    const minT = Math.min(...dates)
-    const maxT = Math.max(...dates)
+    let minT: number
+    let maxT: number
+    if (dateRange?.start && dateRange?.end) {
+      minT = dateRange.start.getTime()
+      maxT = dateRange.end.getTime()
+    } else if (list.length > 0) {
+      const dates = list.flatMap((t) => [toDate(t.start).getTime(), toDate(t.end).getTime()])
+      minT = Math.min(...dates)
+      maxT = Math.max(...dates)
+    } else {
+      const y = new Date().getFullYear()
+      minT = new Date(y, 0, 1).getTime()
+      maxT = new Date(y + 2, 11, 31).getTime()
+    }
     const yearMin = new Date(minT).getFullYear()
     const yearMax = new Date(maxT).getFullYear()
     const totalMonths = (yearMax - yearMin + 1) * 12
@@ -71,7 +85,7 @@ export function GanttChartTemplate3({
       .sort((a, b) => a.label.localeCompare(b.label))
 
     return { parents, yearMin, yearMax, totalMonths, startMonth }
-  }, [tasks])
+  }, [tasks, dateRange])
 
   const years = useMemo(() => {
     const list: number[] = []

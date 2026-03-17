@@ -39,6 +39,7 @@ interface GanttChartTemplate2Props {
   assetName?: string
   subtitle?: string
   viewMode?: ViewMode
+  dateRange?: { start: Date; end: Date } | null
 }
 
 function getPhaseColor(phase?: string): string {
@@ -62,7 +63,25 @@ interface PhaseLane {
   phaseLeftPct: number
   phaseWidthPct: number
   color: string
-  items: { task: TimelineTask; leftPct: number; widthPct: number; isMilestone: boolean }[]
+  items: { task: TimelineTask; leftPct: number; widthPct: number; isMilestone: boolean; labelSlot?: number }[]
+}
+
+/** Number of vertical slots for labels (above/below row) to avoid overlap. */
+const LABEL_SLOT_COUNT = 5
+/** Min horizontal gap (as % of timeline) so two labels in same slot don't overlap. ~80px in 720px ≈ 11%. */
+const MIN_LABEL_GAP_PCT = 14
+
+/** Assign vertical slots (0..4) to items by leftPct so labels don't overlap. */
+function assignLabelSlots(items: { leftPct: number }[]): number[] {
+  if (items.length === 0) return []
+  const sorted = items.map((m, i) => ({ x: m.leftPct, i })).sort((a, b) => a.x - b.x)
+  const slots: number[] = new Array(items.length).fill(0)
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i].x - sorted[i - 1].x < MIN_LABEL_GAP_PCT) {
+      slots[sorted[i].i] = (slots[sorted[i - 1].i] + 1) % LABEL_SLOT_COUNT
+    }
+  }
+  return slots
 }
 
 export function GanttChartTemplate2({
@@ -71,15 +90,27 @@ export function GanttChartTemplate2({
   assetName = '',
   subtitle = 'High level project plan to launch with financials',
   viewMode = 'Year',
+  dateRange = null,
 }: GanttChartTemplate2Props) {
   const { yearMin, yearMax, phaseLanes } = useMemo(() => {
     const list = Array.isArray(tasks) ? tasks : []
-    if (list.length === 0) {
+    if (list.length === 0 && !dateRange?.start) {
       return { yearMin: new Date().getFullYear(), yearMax: new Date().getFullYear() + 5, phaseLanes: [] as PhaseLane[] }
     }
-    const dates = list.flatMap((t) => [toDate(t.start).getTime(), toDate(t.end).getTime()])
-    const minT = Math.min(...dates)
-    const maxT = Math.max(...dates)
+    let minT: number
+    let maxT: number
+    if (dateRange?.start && dateRange?.end) {
+      minT = dateRange.start.getTime()
+      maxT = dateRange.end.getTime()
+    } else if (list.length > 0) {
+      const dates = list.flatMap((t) => [toDate(t.start).getTime(), toDate(t.end).getTime()])
+      minT = Math.min(...dates)
+      maxT = Math.max(...dates)
+    } else {
+      const y = new Date().getFullYear()
+      minT = new Date(y, 0, 1).getTime()
+      maxT = new Date(y + 5, 11, 31).getTime()
+    }
     const yearMin = new Date(minT).getFullYear()
     const yearMax = new Date(maxT).getFullYear()
     const totalMonths = (yearMax - yearMin + 1) * 12
@@ -110,11 +141,13 @@ export function GanttChartTemplate2({
         const widthPct = task.type === 'milestone' ? 0 : Math.max((rightMonths - leftMonths) / totalMonths * 100, 1.5)
         return { task, leftPct, widthPct, isMilestone: task.type === 'milestone' }
       })
+      const slots = assignLabelSlots(items)
+      items.forEach((it, i) => { (it as { labelSlot?: number }).labelSlot = slots[i] })
       lanes.push({ phaseName, phaseStart, phaseEnd, phaseLeftPct, phaseWidthPct, color, items })
     }
     lanes.sort((a, b) => a.phaseStart.getTime() - b.phaseStart.getTime())
     return { yearMin, yearMax, phaseLanes: lanes }
-  }, [tasks])
+  }, [tasks, dateRange])
 
   const timelineHeaders = useMemo(() => {
     const useMonthGranularity = viewMode === 'Month' || viewMode === 'Week' || viewMode === 'Day'
@@ -175,15 +208,30 @@ export function GanttChartTemplate2({
                     backgroundColor: lane.color,
                   }}
                 />
-                {lane.items.map(({ task, leftPct, widthPct, isMilestone }) =>
+                {lane.items.map(({ task, leftPct, widthPct, isMilestone, labelSlot = 0 }) =>
                   isMilestone ? (
                     <div
                       key={task.id}
-                      className="absolute top-1/2 -translate-y-1/2 z-[1] flex flex-col items-center"
-                      style={{ left: `${leftPct}%`, marginLeft: -MILESTONE_SIZE / 2 }}
+                      className="absolute top-0 bottom-0 z-[1] flex flex-col items-center justify-center pointer-events-none"
+                      style={{
+                        left: `max(0%, min(${leftPct}%, calc(100% - 90px)))`,
+                        marginLeft: -MILESTONE_SIZE / 2,
+                        width: 90,
+                        minWidth: 90,
+                      }}
                       title={`${task.name} – ${toDate(task.start).toLocaleDateString()}`}
                     >
-                      <span className="text-[9px] font-medium text-slate-700 truncate max-w-[80px] text-center leading-tight">{task.name}</span>
+                      {labelSlot <= 2 && (
+                        <span
+                          className="text-[9px] font-medium text-slate-700 truncate w-full text-center leading-tight block px-0.5"
+                          style={{
+                            marginBottom: 2,
+                            transform: labelSlot === 2 ? 'translateY(-6px)' : undefined,
+                          }}
+                        >
+                          {task.name}
+                        </span>
+                      )}
                       <div
                         className="rounded flex-shrink-0 border-2 border-slate-700"
                         style={{
@@ -191,9 +239,18 @@ export function GanttChartTemplate2({
                           height: MILESTONE_SIZE,
                           backgroundColor: lane.color,
                           transform: 'rotate(45deg)',
-                          marginTop: 2,
+                          marginTop: labelSlot <= 2 ? 0 : 2,
+                          marginBottom: labelSlot <= 2 ? 2 : 0,
                         }}
                       />
+                      {labelSlot > 2 && (
+                        <span
+                          className="text-[9px] font-medium text-slate-700 truncate w-full text-center leading-tight block px-0.5"
+                          style={{ marginTop: 2, transform: labelSlot === 4 ? 'translateY(4px)' : undefined }}
+                        >
+                          {task.name}
+                        </span>
+                      )}
                     </div>
                   ) : (
                     <div
